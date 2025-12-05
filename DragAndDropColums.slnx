@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="DragAndDropColums/DragAndDropColums.Client/DragAndDropColums.Client.csproj" />
+  <Project Path="DragAndDropColums/DragAndDropColums/DragAndDropColums.csproj" />
+</Solution>

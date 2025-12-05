@@ -1,0 +1,38 @@
+﻿.drag-container {
+    position: relative;
+    width: 100%;
+    min-height: 1200px;
+    background: #f8f9fa;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.grid-item {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    padding: 16px;
+    cursor: move;
+    user-select: none;
+    border: 2px solid transparent;
+}
+
+    .grid-item.dragging {
+        opacity: 0.9;
+        transform: rotate(4deg) scale(1.05);
+        border: 2px dashed #007bff;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+
+.content {
+    font-family: system-ui, sans-serif;
+    font-weight: 600;
+}
+
+    .content small {
+        display: block;
+        margin-top: 8px;
+        color: #666;
+        font-weight: normal;
+        font-size: 0.8em;
+    }
