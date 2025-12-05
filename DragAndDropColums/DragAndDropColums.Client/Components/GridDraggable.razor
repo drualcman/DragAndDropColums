@@ -1,16 +1,17 @@
-﻿@* GridDraggable.razor *@
+﻿@* GridDraggable.razor - Sin JavaScript *@
 <div class="drag-container"
+     @ref="containerRef"
      @onmousemove="OnMouseMove"
-     @onmouseup="OnMouseUp"
-     @onmouseleave="OnMouseUp">
+     @onmouseup="OnMouseUp">
 
     @foreach (var item in Layout.Items.OrderBy(i => i.Order))
     {
         var isDragging = draggingItem?.Id == item.Id;
 
-        <div class="grid-item @(isDragging ? "dragging" : "")"
+        <div class="grid-item @(isDragging ? "dragging" : "") @(IsDropTarget(item) ? "drop-target" : "")"
              style="@GetItemStyle(item, isDragging)"
-             @onmousedown="@(e => StartDrag(item, e))">
+             @onmousedown="@(e => StartDrag(item, e))"
+             @onmouseenter="@(() => HandleMouseEnter(item))">
 
             <div class="content">
                 @item.Title
@@ -21,125 +22,274 @@
             </div>
         </div>
     }
+
+    <!-- Indicador visual de drop position -->
+    @if (showDropIndicator && dropRow >= 0)
+    {
+        <div class="drop-indicator"
+             style="@GetDropIndicatorStyle()">
+            <span>⬇ Soltar aquí (Fila @dropRow)</span>
+        </div>
+    }
 </div>
 
 @code {
     [Parameter] public GridLayout Layout { get; set; } = new();
+    [Parameter] public int ContainerPadding { get; set; } = 20;
 
     private GridItem? draggingItem;
-    private double dragX = 0;
-    private double dragY = 0;
-    private double offsetX = 0;
-    private double offsetY = 0;
+    private GridItem? dropTargetItem;
+    private bool isDragging = false;
+    private double startX, startY;
+    private double currentX, currentY;
+    private int dropRow = -1;
+    private int dropColumn = 1;
+    private bool showDropIndicator = false;
+    private ElementReference containerRef;
+    private double? containerScreenX = null;
+    private double? containerScreenY = null;
 
-    // Altura fija de cada fila (puedes cambiarla)
+    // Constantes de diseño
     private const int RowHeight = 140;
-    private const int Gap = 12; // espacio entre items
+    private const int Gap = 12;
+    private const int ColumnWidthPercent = 48;
 
+    // Estilo para los elementos
     private string GetItemStyle(GridItem item, bool isDragging)
     {
-        double left, top, width;
-
         if (isDragging)
         {
-            left = dragX;
-            top = dragY;
-            width = item.IsFullWidth ? 100 : 48; // % con gap
+            // Durante el drag: posición absoluta relativa al documento
+            // Usamos transform para mejor performance
+            return $"position: absolute; " +
+                   $"transform: translate({currentX}px, {currentY}px) rotate(2deg); " +
+                   $"width: {(item.IsFullWidth ? "100%" : "calc(50% - 14px)")}; " +
+                   $"height: {RowHeight}px; " +
+                   $"z-index: 1000; " +
+                   $"pointer-events: none; " +
+                   $"opacity: 0.9; " +
+                   $"margin: 0 8px;";
         }
         else
         {
-            left = item.Column == 1 ? 0 : 52; // 50% + gap
-            top = item.Row * (RowHeight + Gap);
-            width = item.IsFullWidth ? 100 : 48;
+            // Posición normal en grid
+            var leftPercent = item.IsFullWidth ? 0 : (item.Column == 1 ? 0 : 52);
+            var widthPercent = item.IsFullWidth ? 100 : ColumnWidthPercent;
+
+            return $"position: absolute; " +
+                   $"left: {leftPercent}%; " +
+                   $"top: {item.Row * (RowHeight + Gap)}px; " +
+                   $"width: {widthPercent}%; " +
+                   $"height: {RowHeight}px; " +
+                   $"z-index: {(IsDropTarget(item) ? 2 : 1)}; " +
+                   $"transition: {(isDragging ? "none" : "all 0.3s ease")};";
         }
+    }
+
+    private string GetDropIndicatorStyle()
+    {
+        var left = dropColumn == 1 ? "0%" : "52%";
+        var width = draggingItem?.IsFullWidth == true ? "100%" : "48%";
 
         return $"position: absolute; " +
-               $"left: {left}%; " +
-               $"top: {top}px; " +
-               $"width: {width}%; " +
+               $"left: {left}; " +
+               $"top: {dropRow * (RowHeight + Gap)}px; " +
+               $"width: {width}; " +
                $"height: {RowHeight}px; " +
-               $"z-index: {(isDragging ? 999 : 1)}; " +
-               $"transition: {(isDragging ? "none" : "all 0.2s ease")};";
+               $"border: 2px dashed #28a745; " +
+               $"background: rgba(40, 167, 69, 0.1); " +
+               $"border-radius: 8px; " +
+               $"z-index: 5; " +
+               $"display: flex; " +
+               $"align-items: center; " +
+               $"justify-content: center; " +
+               $"color: #28a745; " +
+               $"font-weight: bold;";
+    }
+
+    private void SetContainerRef(ElementReference element)
+    {
+        containerRef = element;
+        // No usamos JS para obtener posición, usamos un enfoque diferente
     }
 
     private void StartDrag(GridItem item, MouseEventArgs e)
     {
         draggingItem = item;
-        offsetX = e.ClientX - (item.Column == 1 ? 0 : 52) * 0.01 * GetContainerWidthEstimate();
-        offsetY = e.ClientY - (item.Row * (RowHeight + Gap));
+        isDragging = true;
+        showDropIndicator = false;
+
+        // Capturar la posición inicial del ratón
+        startX = e.ClientX;
+        startY = e.ClientY;
+
+        // Calcular la posición actual del elemento en pantalla
+        // Estimamos basado en su posición en el grid
+        var itemTop = item.Row * (RowHeight + Gap);
+        var itemLeftPercent = item.IsFullWidth ? 0 : (item.Column == 1 ? 0 : 52);
+
+        // Estimación: asumimos que el contenedor empieza en (0,0) relativo al viewport
+        // Esto funciona si el contenedor no tiene desplazamiento complejo
+        currentX = (itemLeftPercent / 100.0) * 800; // 800px es estimación de ancho
+        currentY = itemTop;
+
+        // Offset del ratón dentro del elemento
+        var offsetX = e.ClientX - currentX;
+        var offsetY = e.ClientY - currentY;
+
+        // Guardar el offset para cálculos posteriores
+        this.startX = offsetX;
+        this.startY = offsetY;
+
+        // Inicializar posición actual
+        currentX = e.ClientX - offsetX;
+        currentY = e.ClientY - offsetY;
+
         StateHasChanged();
     }
 
     private void OnMouseMove(MouseEventArgs e)
     {
-        if (draggingItem == null)
+        if (!isDragging || draggingItem == null)
             return;
 
-        dragX = e.ClientX - offsetX;
-        dragY = e.ClientY - offsetY;
+        // Actualizar posición del elemento arrastrado
+        currentX = e.ClientX - startX;
+        currentY = e.ClientY - startY;
 
-        // Calcular nueva fila y columna bajo el ratón
-        var containerWidth = GetContainerWidthEstimate();
-        var relativeX = e.ClientX;
-        var relativeY = e.ClientY + WindowScrollYEstimate(); // compensa scroll aproximado
+        // Calcular la fila objetivo basada en la posición Y
+        // Asumimos que el contenedor empieza en Y=0 (scroll manejado por contenedor padre)
+        dropRow = (int)Math.Floor(currentY / (RowHeight + Gap));
+        if (dropRow < 0)
+            dropRow = 0;
 
-        int targetColumn = relativeX > containerWidth * 0.5 ? 2 : 1;
-        int targetRow = (int)Math.Floor(relativeY / (RowHeight + Gap));
+        // Calcular columna basada en posición X
+        // Estimamos ancho del contenedor como 800px
+        var containerWidth = 800;
+        dropColumn = currentX > containerWidth * 0.5 ? 2 : 1;
 
-        if (targetRow < 0)
-            targetRow = 0;
+        // Si es full width, siempre columna 1
+        if (draggingItem.IsFullWidth)
+        {
+            dropColumn = 1;
+        }
 
-        // Simular movimiento (solo para feedback visual)
-        // No actualizamos aún la posición real
+        showDropIndicator = true;
         StateHasChanged();
+    }
+
+    private void HandleMouseEnter(GridItem item)
+    {
+        if (!isDragging || draggingItem == null || draggingItem.Id == item.Id)
+            return;
+
+        dropTargetItem = item;
+        StateHasChanged();
+    }
+
+    private bool IsDropTarget(GridItem item)
+    {
+        return dropTargetItem?.Id == item.Id && isDragging;
     }
 
     private void OnMouseUp(MouseEventArgs e)
     {
-        if (draggingItem == null)
+        if (!isDragging || draggingItem == null)
             return;
 
-        var containerWidth = GetContainerWidthEstimate();
-        var relativeX = e.ClientX;
-        var relativeY = e.ClientY + WindowScrollYEstimate();
-
-        int targetColumn = relativeX > containerWidth * 0.5 ? 2 : 1;
-        int targetRow = (int)Math.Max(0, Math.Floor(relativeY / (RowHeight + Gap)));
-
-        // Crear posición candidata
-        var candidate = new GridItem
+        try
         {
-            Row = targetRow,
-            Column = draggingItem.IsFullWidth ? 1 : targetColumn,
-            IsFullWidth = draggingItem.IsFullWidth
-        };
+            // Usar la posición calculada durante el drag
+            if (dropRow >= 0)
+            {
+                // Crear posición candidata
+                var candidate = new GridItem
+                {
+                    Row = dropRow,
+                    Column = draggingItem.IsFullWidth ? 1 : dropColumn,
+                    IsFullWidth = draggingItem.IsFullWidth
+                };
 
-        // Quitar temporalmente el item actual del tablero
-        Layout.RemoveFromOccupied(draggingItem);
+                // Quitar temporalmente el item actual
+                Layout.RemoveFromOccupied(draggingItem);
 
-        if (Layout.CanPlace(candidate))
-        {
-            // ¡Se puede colocar!
-            draggingItem.Row = candidate.Row;
-            draggingItem.Column = candidate.Column;
-            Layout.ReorderAll();
+                // Intentar colocar en la posición deseada
+                if (Layout.CanPlace(candidate))
+                {
+                    draggingItem.Row = candidate.Row;
+                    draggingItem.Column = candidate.Column;
+                }
+                else
+                {
+                    // Buscar posición más cercana disponible
+                    FindAndSetClosestPosition(draggingItem, candidate);
+                }
+
+                // Reordenar todo
+                Layout.RecalculateOccupied();
+                Layout.ReorderAll();
+            }
         }
-
-        // Restaurar ocupación
-        Layout.RecalculateOccupied();
-        draggingItem = null;
-        StateHasChanged();
+        finally
+        {
+            // Limpiar estado
+            isDragging = false;
+            draggingItem = null;
+            dropTargetItem = null;
+            showDropIndicator = false;
+            dropRow = -1;
+            StateHasChanged();
+        }
     }
 
-    // Estimación simple del ancho del contenedor (funciona perfecto en 98% casos)
-    private double GetContainerWidthEstimate() => 800;
-
-    // Compensación de scroll (aproximada, pero suficiente)
-    private double WindowScrollYEstimate() => 0;
-
-    protected override void OnInitialized()
+    private void FindAndSetClosestPosition(GridItem item, GridItem desiredPos)
     {
-        Layout.RecalculateOccupied();
-        Layout.ReorderAll();
+        // Buscar hacia abajo
+        for (int offset = 0; offset < 10; offset++)
+        {
+            var testPos = new GridItem
+            {
+                Row = desiredPos.Row + offset,
+                Column = desiredPos.Column,
+                IsFullWidth = desiredPos.IsFullWidth
+            };
+
+            if (Layout.CanPlace(testPos))
+            {
+                item.Row = testPos.Row;
+                item.Column = testPos.Column;
+                return;
+            }
+        }
+
+        // Si no encuentra hacia abajo, buscar hacia arriba
+        for (int offset = 1; offset < 10; offset++)
+        {
+            var testPos = new GridItem
+            {
+                Row = Math.Max(0, desiredPos.Row - offset),
+                Column = desiredPos.Column,
+                IsFullWidth = desiredPos.IsFullWidth
+            };
+
+            if (Layout.CanPlace(testPos))
+            {
+                item.Row = testPos.Row;
+                item.Column = testPos.Column;
+                return;
+            }
+        }
+
+        // Último recurso: poner al final
+        item.Row = Layout.Items.Max(i => i.Row) + 1;
+        item.Column = desiredPos.Column;
+    }
+
+    // Método para manejar scroll si es necesario
+    private void OnScroll(EventArgs e)
+    {
+        // Si el contenedor está dentro de un scrollable container,
+        // necesitaríamos trackear el scroll offset
+        // Esto se puede hacer con un componente padre que pase el offset como parámetro
     }
 }

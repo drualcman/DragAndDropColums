@@ -3,50 +3,81 @@
 public class GridLayout
 {
     public List<GridItem> Items { get; set; } = new();
-    private HashSet<(int row, int col)> occupied = new();
+    private Dictionary<(int, int), GridItem> positionMap = new();
+
+    public event Action? OnLayoutChanged;
 
     public void RecalculateOccupied()
     {
-        occupied.Clear();
+        positionMap.Clear();
         foreach (var item in Items)
         {
             if (item.IsFullWidth)
             {
-                occupied.Add((item.Row, 1));
-                occupied.Add((item.Row, 2));
+                positionMap[(item.Row, 1)] = item;
+                positionMap[(item.Row, 2)] = item;
             }
             else
             {
-                occupied.Add((item.Row, item.Column));
+                positionMap[(item.Row, item.Column)] = item;
             }
         }
+        OnLayoutChanged?.Invoke();
     }
 
     public void RemoveFromOccupied(GridItem item)
     {
         if (item.IsFullWidth)
         {
-            occupied.Remove((item.Row, 1));
-            occupied.Remove((item.Row, 2));
+            positionMap.Remove((item.Row, 1));
+            positionMap.Remove((item.Row, 2));
         }
         else
         {
-            occupied.Remove((item.Row, item.Column));
+            positionMap.Remove((item.Row, item.Column));
         }
     }
 
-    public bool CanPlace(GridItem item)
+    public bool CanPlace(GridItem candidate)
     {
-        if (item.IsFullWidth)
-            return !occupied.Contains((item.Row, 1)) && !occupied.Contains((item.Row, 2));
+        if (candidate.IsFullWidth)
+        {
+            return !positionMap.ContainsKey((candidate.Row, 1)) &&
+                   !positionMap.ContainsKey((candidate.Row, 2));
+        }
+        else
+        {
+            return !positionMap.ContainsKey((candidate.Row, candidate.Column));
+        }
+    }
 
-        return item.Column >= 1 && item.Column <= 2 && !occupied.Contains((item.Row, item.Column));
+    public GridItem? GetItemAt(int row, int column)
+    {
+        positionMap.TryGetValue((row, column), out var item);
+        return item;
     }
 
     public void ReorderAll()
     {
-        int order = 0;
-        foreach (var item in Items.OrderBy(i => i.Row).ThenByDescending(i => i.IsFullWidth ? 1 : 0))
-            item.Order = order++;
+        // Ordenar por posición
+        Items = Items
+            .OrderBy(i => i.Row)
+            .ThenBy(i => i.Column)
+            .ToList();
+
+        // Reasignar órdenes
+        for (int i = 0; i < Items.Count; i++)
+        {
+            Items[i].Order = i;
+        }
+
+        RecalculateOccupied();
+    }
+
+    public void SwapItems(GridItem item1, GridItem item2)
+    {
+        (item1.Row, item2.Row) = (item2.Row, item1.Row);
+        (item1.Column, item2.Column) = (item2.Column, item1.Column);
+        ReorderAll();
     }
 }
