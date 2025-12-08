@@ -13,17 +13,17 @@
         <button @onclick="SaveLayout" class="btn btn-success">💾 Guardar</button>
     </div>
 
-    @if (SelectedItem != null)
+    @if (_selectedItem != null)
     {
         <div class="selected-item-info">
             <strong>Seleccionado:</strong>
-            <span class="selected-item-label" style="background-color: @SelectedItem.BackgroundColor;">
-                @SelectedItem.Content
+            <span class="selected-item-label" style="background-color: @_selectedItem.BackgroundColor;">
+                @_selectedItem.Content
             </span>
             <span class="selected-item-details">
-                (@SelectedItem.Column,@SelectedItem.Row) - Tamaño: @SelectedItem.ColumnSpan×@SelectedItem.RowSpan
+                (@_selectedItem.Column,@_selectedItem.Row) - Tamaño: @_selectedItem.ColumnSpan×@_selectedItem.RowSpan
             </span>
-            <button @onclick="@(() => RemoveItem(SelectedItem))" class="btn-danger">🗑️ Eliminar</button>
+            <button @onclick="@(() => RemoveItem(_selectedItem))" class="btn-danger">🗑️ Eliminar</button>
         </div>
     }
 </div>
@@ -39,7 +39,7 @@
             <li>ESC para deseleccionar, ESPACIO para alternar selección</li>
         </ul>
     </div>
-    @if (SelectedItem != null)
+    @if (_selectedItem != null)
     {
         <div class="movement-controls">
             <h4>📦 Control del Elemento Seleccionado:</h4>
@@ -50,19 +50,17 @@
                 <button @onclick="@(() => MoveSelectedItem(0, 1))" class="btn-move">⬇️ Abajo</button>
             </div>
             <div class="resize-buttons">
-                <button @onclick="@(() => ResizeItemWidth(SelectedItem, 1))" class="btn-resize">➕ Ancho</button>
-                <button @onclick="@(() => ResizeItemWidth(SelectedItem, -1))" class="btn-resize">➖ Ancho</button>
-                <button @onclick="@(() => ResizeItemHeight(SelectedItem, 1))" class="btn-resize">➕ Alto</button>
-                <button @onclick="@(() => ResizeItemHeight(SelectedItem, -1))" class="btn-resize">➖ Alto</button>
+                <button @onclick="@(() => ResizeItemWidth(_selectedItem, 1))" class="btn-resize">➕ Ancho</button>
+                <button @onclick="@(() => ResizeItemWidth(_selectedItem, -1))" class="btn-resize">➖ Ancho</button>
+                <button @onclick="@(() => ResizeItemHeight(_selectedItem, 1))" class="btn-resize">➕ Alto</button>
+                <button @onclick="@(() => ResizeItemHeight(_selectedItem, -1))" class="btn-resize">➖ Alto</button>
             </div>
         </div>
     }
 </div>
 
 
-
-
-<div class="draggable-grid-container @DragCursorClass"
+<div class="draggable-grid-container @_dragState.DragCursorClass"
      @onkeydown=HandleKeyDown
      @onmouseup=HandleMouseUp
      @onmouseleave=CleanUpDrag
@@ -81,9 +79,9 @@
                 bool isCorner = false;
                 string cornerClass = "";
 
-                if (IsDragging && DraggingItem != null && FinalDropTarget.HasValue)
+                if (_dragState.IsDragging && _dragState.DraggingItem != null && _dragState.FinalDropTarget.HasValue)
                 {
-                    isCorner = IsDropAreaCorner(col, row, DraggingItem, FinalDropTarget.Value);
+                    isCorner = IsDropAreaCorner(col, row, _dragState.DraggingItem, _dragState.FinalDropTarget.Value);
                     if (isCorner)
                     {
                         cornerClass = "drop-area-corner";
@@ -94,14 +92,14 @@
 
                 // Calcula si esta celda está en el área de drop del elemento que se está arrastrando
                 bool isInDropArea = false;
-                if (IsDragging && DraggingItem != null && FinalDropTarget.HasValue)
+                if (_dragState.IsDragging && _dragState.DraggingItem != null && _dragState.FinalDropTarget.HasValue)
                 {
-                    var dropCells = GetItemCells(DraggingItem, FinalDropTarget.Value.Col, FinalDropTarget.Value.Row);
+                    var dropCells = GetItemCells(_dragState.DraggingItem, _dragState.FinalDropTarget.Value.Col, _dragState.FinalDropTarget.Value.Row);
                     isInDropArea = dropCells.Contains((col, row));
-                    var target = FinalDropTarget.Value;
+                    var target = _dragState.FinalDropTarget.Value;
                     <div class="drop-area-highlight"
-                         style="grid-column: @target.Col / span @DraggingItem.ColumnSpan;
-                                        grid-row: @target.Row / span @DraggingItem.RowSpan;
+                         style="grid-column: @target.Col / span @_dragState.DraggingItem.ColumnSpan;
+                                        grid-row: @target.Row / span @_dragState.DraggingItem.RowSpan;
                                         pointer-events: none;">
                     </div>
                 }
@@ -111,7 +109,7 @@
                      @onclick:preventDefault
                      @onclick="@(() => CellClicked(col, row))">
                     <small>@col,@row</small>
-                    @if (isInDropArea && IsDragging)
+                    @if (isInDropArea && _dragState.IsDragging)
                     {
                         <div class="drop-indicator">Drop</div>
                     }
@@ -148,7 +146,7 @@
                     <div class="item-size">
                         <small>@item.ColumnSpan×@item.RowSpan</small>
                     </div>
-                    @if (SelectedItem?.Id == item.Id)
+                    @if (_selectedItem?.Id == item.Id)
                     {
                         <div class="selected-indicator">★</div>
                     }
@@ -162,36 +160,36 @@
 
 
 <!-- Editor de propiedades -->
-@if (SelectedItem != null)
+@if (_selectedItem != null)
 {
     <div class="item-editor">
         <h4>✏️ Editar Elemento</h4>
 
         <div class="editor-section">
             <label>📝 Contenido:</label>
-            <textarea @bind="SelectedItem.Content" class="form-control" rows="3"></textarea>
+            <textarea @bind="_selectedItem.Content" class="form-control" rows="3"></textarea>
         </div>
 
         <div class="editor-grid">
             <div class="editor-section">
                 <label>Ancho (columnas):</label>
                 <input type="range" min="1" max="@Layout.Columns"
-                       @bind="SelectedItem.ColumnSpan" @bind:event="oninput" />
-                <span>@SelectedItem.ColumnSpan</span>
+                       @bind="_selectedItem.ColumnSpan" @bind:event="oninput" />
+                <span>@_selectedItem.ColumnSpan</span>
             </div>
 
             <div class="editor-section">
                 <label>Alto (filas):</label>
                 <input type="range" min="1" max="@Layout.Rows"
-                       @bind="SelectedItem.RowSpan" @bind:event="oninput" />
-                <span>@SelectedItem.RowSpan</span>
+                       @bind="_selectedItem.RowSpan" @bind:event="oninput" />
+                <span>@_selectedItem.RowSpan</span>
             </div>
         </div>
 
         <div class="editor-section">
             <label>🎨 Color de fondo:</label>
-            <input type="color" @bind="SelectedItem.BackgroundColor" class="color-picker" />
-            <input type="text" @bind="SelectedItem.BackgroundColor" class="color-text" />
+            <input type="color" @bind="_selectedItem.BackgroundColor" class="color-picker" />
+            <input type="text" @bind="_selectedItem.BackgroundColor" class="color-text" />
         </div>
 
         <div class="editor-actions">
