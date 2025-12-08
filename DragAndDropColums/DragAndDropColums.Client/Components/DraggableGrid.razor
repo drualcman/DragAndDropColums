@@ -3,10 +3,10 @@
 @using System.Text.Json
 
 <div class="draggable-grid-container @DragCursorClass"
-     @onkeydown="HandleKeyDown"
-     @onmousemove="HandleMouseMove"
-     @onmouseup="HandleMouseUp"
-     @onmouseleave="CleanUpDrag"
+     @onkeydown=HandleKeyDown
+     @onmousemove=HandleMouseMove
+     @onmouseup=HandleMouseUp
+     @onmouseleave=CleanUpDrag
      tabindex="0" @ref="containerRef">
 
     <div class="grid-controls">
@@ -79,6 +79,7 @@
                 bool isDropTarget = DropTarget?.Col == col && DropTarget?.Row == row;
 
                 <div class="grid-cell @(isDropTarget ? "drop-target" : "")"
+                     @onclick:preventDefault
                      @onclick="@(() => CellClicked(col, row))">
                     <small>@col,@row</small>
                     @if (isDropTarget && IsDragging)
@@ -95,6 +96,7 @@
             <div class="grid-item"
                  style="@GetItemStyle(item)"
                  @onmousedown="@((e) => StartMouseDrag(e, item))"
+                 @onclick:preventDefault
                  @onclick="@(() => SelectItem(item))">
 
                 <div class="item-header">

@@ -452,3 +452,25 @@ textarea.form-control {
         gap: 10px;
     }
 }
+
+/* Agrega esto al final de tu CSS */
+.grid-item.selected {
+    border: 3px solid #007bff !important;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.3) !important;
+    z-index: 100 !important;
+}
+
+/* Para prevenir el salto al hacer click */
+.draggable-grid-container * {
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Mejorar el foco */
+.draggable-grid-container:focus {
+    outline: 2px solid #007bff;
+    outline-offset: 2px;
+}
+
+    .draggable-grid-container:focus:not(:focus-visible) {
+        outline: none;
+    }
