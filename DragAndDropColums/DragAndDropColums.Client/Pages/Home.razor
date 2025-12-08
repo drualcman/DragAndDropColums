@@ -1,22 +1,32 @@
 ﻿@page "/"
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Drag & Drop Grid - Simple</PageTitle>
 
-<h1>Hello, world!</h1>
+<h1>Grid con Drag & Drop Simple</h1>
 
-<GridDraggable Layout=layout />
+<GridDraggable Layout="layout" />
 
 @code {
-    private GridLayout layout = new()
+    private GridLayout layout = new();
+
+    protected override void OnInitialized()
     {
-        Items = 
+        ResetGrid();
+    }
+
+    private void ResetGrid()
+    {
+        layout.Items = new List<GridItem>
         {
             new GridItem { Id = 1, Title = "A", Row = 0, Column = 1, IsFullWidth = false },
             new GridItem { Id = 2, Title = "B", Row = 0, Column = 2, IsFullWidth = false },
             new GridItem { Id = 3, Title = "C", Row = 1, Column = 1, IsFullWidth = false },
             new GridItem { Id = 4, Title = "D", Row = 1, Column = 2, IsFullWidth = false },
             new GridItem { Id = 5, Title = "FULL 1", Row = 2, Column = 1, IsFullWidth = true },
-            // ... más items
-        }
-    };
+            new GridItem { Id = 6, Title = "E", Row = 3, Column = 1, IsFullWidth = false },
+            new GridItem { Id = 7, Title = "F", Row = 3, Column = 2, IsFullWidth = false }
+        };
+        
+    }
+
 }
