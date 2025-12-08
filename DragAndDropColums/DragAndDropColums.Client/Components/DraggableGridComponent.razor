@@ -81,7 +81,7 @@
 
                 if (_dragState.IsDragging && _dragState.DraggingItem != null && _dragState.FinalDropTarget.HasValue)
                 {
-                    isCorner = IsDropAreaCorner(col, row, _dragState.DraggingItem, _dragState.FinalDropTarget.Value);
+                    isCorner = _styleService.IsDropAreaCorner(col, row, _dragState.DraggingItem, _dragState.FinalDropTarget.Value);
                     if (isCorner)
                     {
                         cornerClass = "drop-area-corner";
@@ -94,7 +94,7 @@
                 bool isInDropArea = false;
                 if (_dragState.IsDragging && _dragState.DraggingItem != null && _dragState.FinalDropTarget.HasValue)
                 {
-                    var dropCells = GetItemCells(_dragState.DraggingItem, _dragState.FinalDropTarget.Value.Col, _dragState.FinalDropTarget.Value.Row);
+                    var dropCells = _placementService.GetItemCells(_dragState);
                     isInDropArea = dropCells.Contains((col, row));
                     var target = _dragState.FinalDropTarget.Value;
                     <div class="drop-area-highlight"

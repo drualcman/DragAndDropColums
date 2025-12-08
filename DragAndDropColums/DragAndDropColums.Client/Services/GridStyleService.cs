@@ -35,4 +35,12 @@ public class GridStyleService
                $"z-index: {(isSelected || isDragging ? "100" : "10")};" +
                $"{(isDragging ? "opacity: 0.8; cursor: grabbing;" : "cursor: grab;")}";
     }
+
+    public bool IsDropAreaCorner(int col, int row, GridItem item, (int Col, int Row) target)
+    {
+        return (col == target.Col && row == target.Row) || // Esquina superior izquierda
+               (col == target.Col + item.ColumnSpan - 1 && row == target.Row) || // Esquina superior derecha
+               (col == target.Col && row == target.Row + item.RowSpan - 1) || // Esquina inferior izquierda
+               (col == target.Col + item.ColumnSpan - 1 && row == target.Row + item.RowSpan - 1); // Esquina inferior derecha
+    }
 }
