@@ -336,6 +336,9 @@
 
 /* Instrucciones */
 .grid-instructions {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
     background: #e8f4fd;
     border-left: 4px solid #2196F3;
     padding: 15px;

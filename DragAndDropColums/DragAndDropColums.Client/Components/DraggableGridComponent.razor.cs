@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components.Web;
+using System.Text.Json;
 
 namespace DragAndDropColums.Client.Components;
 
@@ -765,5 +766,149 @@ public partial class DraggableGridComponent
                (col == target.Col + item.ColumnSpan - 1 && row == target.Row) || // Esquina superior derecha
                (col == target.Col && row == target.Row + item.RowSpan - 1) || // Esquina inferior izquierda
                (col == target.Col + item.ColumnSpan - 1 && row == target.Row + item.RowSpan - 1); // Esquina inferior derecha
+    }
+
+
+
+    private void ResizeItemWidth(GridItem item, int delta)
+    {
+        int newColSpan = item.ColumnSpan + delta;
+
+        if (newColSpan < 1)
+        {
+            newColSpan = 1;
+        }
+
+        if (newColSpan > Layout.Columns)
+        {
+            newColSpan = Layout.Columns;
+        }
+
+        if (item.Column + newColSpan - 1 > Layout.Columns)
+        {
+            return;
+        }
+
+        int originalColSpan = item.ColumnSpan;
+        item.ColumnSpan = newColSpan;
+
+        if (HasCollision(item, item.Column, item.Row))
+        {
+            item.ColumnSpan = originalColSpan;
+            return;
+        }
+
+        LayoutChanged.InvokeAsync(Layout);
+        StateHasChanged();
+    }
+
+    private void ResizeItemHeight(GridItem item, int delta)
+    {
+        int newRowSpan = item.RowSpan + delta;
+
+        if (newRowSpan < 1)
+        {
+            newRowSpan = 1;
+        }
+
+        if (newRowSpan > Layout.Rows)
+        {
+            newRowSpan = Layout.Rows;
+        }
+
+        if (item.Row + newRowSpan - 1 > Layout.Rows)
+        {
+            return;
+        }
+
+        int originalRowSpan = item.RowSpan;
+        item.RowSpan = newRowSpan;
+
+        if (HasCollision(item, item.Column, item.Row))
+        {
+            item.RowSpan = originalRowSpan;
+            return;
+        }
+
+        LayoutChanged.InvokeAsync(Layout);
+        StateHasChanged();
+    }
+
+    private void AddNewItem()
+    {
+        string[] colors = new string[] { "#FFCCCC", "#CCFFCC", "#CCCCFF", "#FFFFCC", "#FFCCFF", "#CCFFFF" };
+
+        GridItem newItem = new GridItem
+        {
+            Content = "Elemento " + (Layout.Items.Count + 1),
+            Column = 1,
+            Row = 1,
+            ColumnSpan = 2,
+            RowSpan = 2,
+            BackgroundColor = colors[Layout.Items.Count % colors.Length]
+        };
+
+        bool placed = false;
+        for (int row = 1; row <= Layout.Rows && !placed; row++)
+        {
+            for (int col = 1; col <= Layout.Columns && !placed; col++)
+            {
+                if (col + newItem.ColumnSpan - 1 <= Layout.Columns &&
+                    row + newItem.RowSpan - 1 <= Layout.Rows &&
+                    !HasCollision(newItem, col, row))
+                {
+                    newItem.Column = col;
+                    newItem.Row = row;
+                    Layout.Items.Add(newItem);
+                    SelectedItem = newItem;
+                    placed = true;
+                }
+            }
+        }
+
+        if (!placed)
+        {
+            newItem.ColumnSpan = 1;
+            newItem.RowSpan = 1;
+
+            for (int row = 1; row <= Layout.Rows && !placed; row++)
+            {
+                for (int col = 1; col <= Layout.Columns && !placed; col++)
+                {
+                    if (!HasCollision(newItem, col, row))
+                    {
+                        newItem.Column = col;
+                        newItem.Row = row;
+                        Layout.Items.Add(newItem);
+                        SelectedItem = newItem;
+                        placed = true;
+                    }
+                }
+            }
+        }
+
+        LayoutChanged.InvokeAsync(Layout);
+        StateHasChanged();
+    }
+
+    private void ResetGrid()
+    {
+        Layout.Items.Clear();
+        LayoutChanged.InvokeAsync(Layout);
+        SelectedItem = null;
+        StateHasChanged();
+    }
+
+    private void SaveLayout()
+    {
+        string json = JsonSerializer.Serialize(Layout, new JsonSerializerOptions { WriteIndented = true });
+        Console.WriteLine("Layout guardado:");
+        Console.WriteLine(json);
+    }
+
+    private void CloseEditor()
+    {
+        SelectedItem = null;
+        StateHasChanged();
     }
 }

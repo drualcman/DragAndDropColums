@@ -1,6 +1,66 @@
-﻿@* DraggableGrid.razor *@
-@namespace DragAndDropColums.Client.Components
-@using System.Text.Json
+﻿<div class="grid-controls">
+    <button @onclick="AddNewItem" class="btn btn-primary">➕ Agregar Elemento</button>
+    <button @onclick="ResetGrid" class="btn btn-secondary">🔄 Reiniciar</button>
+    <div class="grid-info">
+        <label>Columnas:</label>
+        <input type="range" min="4" max="12" @bind="Layout.Columns" @bind:event="oninput" />
+        <span>@Layout.Columns</span>
+
+        <label>Filas:</label>
+        <input type="range" min="4" max="20" @bind="Layout.Rows" @bind:event="oninput" />
+        <span>@Layout.Rows</span>
+
+        <button @onclick="SaveLayout" class="btn btn-success">💾 Guardar</button>
+    </div>
+
+    @if (SelectedItem != null)
+    {
+        <div class="selected-item-info">
+            <strong>Seleccionado:</strong>
+            <span class="selected-item-label" style="background-color: @SelectedItem.BackgroundColor;">
+                @SelectedItem.Content
+            </span>
+            <span class="selected-item-details">
+                (@SelectedItem.Column,@SelectedItem.Row) - Tamaño: @SelectedItem.ColumnSpan×@SelectedItem.RowSpan
+            </span>
+            <button @onclick="@(() => RemoveItem(SelectedItem))" class="btn-danger">🗑️ Eliminar</button>
+        </div>
+    }
+</div>
+
+<div class="grid-instructions">
+    <div>
+        <p>🎯 <strong>Instrucciones:</strong></p>
+        <ul>
+            <li>🖱️ <strong>Click</strong> para seleccionar un elemento (borde azul)</li>
+            <li>🖱️ <strong>Click y arrastra</strong> para mover elementos (borde rojo punteado)</li>
+            <li>⬅️➡️⬆️⬇️ Usa <strong>flechas del teclado</strong> para mover el seleccionado</li>
+            <li>❌ Usa <strong>Delete</strong> para eliminar el elemento seleccionado</li>
+            <li>ESC para deseleccionar, ESPACIO para alternar selección</li>
+        </ul>
+    </div>
+    @if (SelectedItem != null)
+    {
+        <div class="movement-controls">
+            <h4>📦 Control del Elemento Seleccionado:</h4>
+            <div class="movement-buttons">
+                <button @onclick="@(() => MoveSelectedItem(0, -1))" class="btn-move">⬆️ Arriba</button>
+                <button @onclick="@(() => MoveSelectedItem(-1, 0))" class="btn-move">⬅️ Izquierda</button>
+                <button @onclick="@(() => MoveSelectedItem(1, 0))" class="btn-move">➡️ Derecha</button>
+                <button @onclick="@(() => MoveSelectedItem(0, 1))" class="btn-move">⬇️ Abajo</button>
+            </div>
+            <div class="resize-buttons">
+                <button @onclick="@(() => ResizeItemWidth(SelectedItem, 1))" class="btn-resize">➕ Ancho</button>
+                <button @onclick="@(() => ResizeItemWidth(SelectedItem, -1))" class="btn-resize">➖ Ancho</button>
+                <button @onclick="@(() => ResizeItemHeight(SelectedItem, 1))" class="btn-resize">➕ Alto</button>
+                <button @onclick="@(() => ResizeItemHeight(SelectedItem, -1))" class="btn-resize">➖ Alto</button>
+            </div>
+        </div>
+    }
+</div>
+
+
+
 
 <div class="draggable-grid-container @DragCursorClass"
      @onkeydown=HandleKeyDown
@@ -9,8 +69,6 @@
      tabindex="0">
 
     <!-- Grid principal -->
-    <!-- Reemplaza la sección de celdas y elementos con esto: -->
-
     <div class="draggable-grid"
          style="@GetGridStyle()"
          @onmousemove=HandleMouseMove>
@@ -43,8 +101,8 @@
                     var target = FinalDropTarget.Value;
                     <div class="drop-area-highlight"
                          style="grid-column: @target.Col / span @DraggingItem.ColumnSpan;
-                            grid-row: @target.Row / span @DraggingItem.RowSpan;
-                            pointer-events: none;">
+                                        grid-row: @target.Row / span @DraggingItem.RowSpan;
+                                        pointer-events: none;">
                     </div>
                 }
 
@@ -102,3 +160,43 @@
 
 </div>
 
+
+<!-- Editor de propiedades -->
+@if (SelectedItem != null)
+{
+    <div class="item-editor">
+        <h4>✏️ Editar Elemento</h4>
+
+        <div class="editor-section">
+            <label>📝 Contenido:</label>
+            <textarea @bind="SelectedItem.Content" class="form-control" rows="3"></textarea>
+        </div>
+
+        <div class="editor-grid">
+            <div class="editor-section">
+                <label>Ancho (columnas):</label>
+                <input type="range" min="1" max="@Layout.Columns"
+                       @bind="SelectedItem.ColumnSpan" @bind:event="oninput" />
+                <span>@SelectedItem.ColumnSpan</span>
+            </div>
+
+            <div class="editor-section">
+                <label>Alto (filas):</label>
+                <input type="range" min="1" max="@Layout.Rows"
+                       @bind="SelectedItem.RowSpan" @bind:event="oninput" />
+                <span>@SelectedItem.RowSpan</span>
+            </div>
+        </div>
+
+        <div class="editor-section">
+            <label>🎨 Color de fondo:</label>
+            <input type="color" @bind="SelectedItem.BackgroundColor" class="color-picker" />
+            <input type="text" @bind="SelectedItem.BackgroundColor" class="color-text" />
+        </div>
+
+        <div class="editor-actions">
+            <button @onclick="CloseEditor" class="btn btn-primary">✅ Aplicar</button>
+            <button @onclick="DeselectItem" class="btn btn-secondary">❌ Cancelar</button>
+        </div>
+    </div>
+}
