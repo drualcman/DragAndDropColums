@@ -5,19 +5,17 @@ namespace DragAndDropColums.Client.Components;
 
 public partial class DraggableGrid
 {
-    [Parameter]
-    public GridLayout Layout { get; set; } = new();
-
-    [Parameter]
-    public EventCallback<GridLayout> LayoutChanged { get; set; }
+    [Parameter] public GridLayout Layout { get; set; } = new();
+    [Parameter] public EventCallback<GridLayout> LayoutChanged { get; set; }
 
     private GridItem? SelectedItem { get; set; }
     private GridItem? DraggingItem { get; set; }
-    private (int Col, int Row)? DropTarget { get; set; }
     private bool IsDragging { get; set; }
     private string? DragCursorClass { get; set; }
-
-    private (int StartX, int StartY, int StartCol, int StartRow)? DragStartInfo { get; set; }
+    private (int ClientX, int ClientY)? DragStartMouse { get; set; }
+    private (int Col, int Row)? DragStartCell { get; set; }
+    private (int Col, int Row)? HoverTarget { get; set; }
+    private (int Col, int Row)? FinalDropTarget { get; set; }
 
     protected override void OnInitialized()
     {
@@ -43,9 +41,9 @@ public partial class DraggableGrid
         bool isDragging = DraggingItem?.Id == item.Id;
 
         string borderColor = isSelected ? "#007bff" :
-                            isDragging ? "#ff6b6b" : "#333";
+                             isDragging ? "#ff6b6b" : "#333";
         string borderStyle = isSelected ? "3px solid" :
-                            isDragging ? "3px dashed" : "2px solid";
+                             isDragging ? "3px dashed" : "2px solid";
         string boxShadow = isSelected ? "0 0 0 3px rgba(0, 123, 255, 0.3)" : "none";
 
         return $"grid-column: {item.Column} / span {item.ColumnSpan}; " +
@@ -63,59 +61,69 @@ public partial class DraggableGrid
         SelectedItem = item;
         IsDragging = true;
         DragCursorClass = "dragging";
-        DragStartInfo = ((int)e.ClientX, (int)e.ClientY, item.Column, item.Row);
+
+        DragStartMouse = ((int)e.ClientX, (int)e.ClientY);
+        DragStartCell = (item.Column, item.Row);
+
         StateHasChanged();
     }
-
     private void HandleMouseMove(MouseEventArgs e)
     {
-        if (!IsDragging || DraggingItem == null || !DragStartInfo.HasValue)
+        if (!IsDragging || DraggingItem == null || !DragStartMouse.HasValue || !DragStartCell.HasValue)
             return;
 
-        var (startX, startY, startCol, startRow) = DragStartInfo.Value;
+        var (startX, startY) = DragStartMouse.Value;
+        var (startCol, startRow) = DragStartCell.Value;
+
         int deltaX = (int)e.ClientX - startX;
         int deltaY = (int)e.ClientY - startY;
-
         int cellSizeWithGap = Layout.CellSize + Layout.Gap;
 
-        if (Math.Abs(deltaX) > 5 || Math.Abs(deltaY) > 5)
-        {
-            int deltaCol = (int)Math.Round((double)deltaX / cellSizeWithGap);
-            int deltaRow = (int)Math.Round((double)deltaY / cellSizeWithGap);
+        // Solo procesar si se movió lo suficiente
+        if (Math.Abs(deltaX) < 8 && Math.Abs(deltaY) < 8)
+            return;
 
-            int newCol = Math.Max(1, Math.Min(startCol + deltaCol, Layout.Columns - DraggingItem.ColumnSpan + 1));
-            int newRow = Math.Max(1, Math.Min(startRow + deltaRow, Layout.Rows - DraggingItem.RowSpan + 1));
+        // Cálculo correcto con Math.Round (el más natural)
+        int deltaCol = (int)Math.Round(deltaX / (double)cellSizeWithGap);
+        int deltaRow = (int)Math.Round(deltaY / (double)cellSizeWithGap);
 
-            if (newCol != DropTarget?.Col || newRow != DropTarget?.Row)
-            {
-                DropTarget = (newCol, newRow);
-                StateHasChanged();
-            }
-        }
+        // HoverTarget: celda bajo el ratón
+        int hoverCol = startCol + deltaCol;
+        int hoverRow = startRow + deltaRow;
+        hoverCol = Math.Max(1, Math.Min(hoverCol, Layout.Columns));
+        hoverRow = Math.Max(1, Math.Min(hoverRow, Layout.Rows));
+        HoverTarget = (hoverCol, hoverRow);
+
+        // FinalDropTarget: donde realmente cabe
+        int maxCol = Layout.Columns - DraggingItem.ColumnSpan + 1;
+        int maxRow = Layout.Rows - DraggingItem.RowSpan + 1;
+        int finalCol = Math.Max(1, Math.Min(hoverCol, maxCol));
+        int finalRow = Math.Max(1, Math.Min(hoverRow, maxRow));
+        FinalDropTarget = (finalCol, finalRow);
+
+        StateHasChanged();
     }
 
     private async Task HandleMouseUp(MouseEventArgs e)
     {
-        if (IsDragging && DraggingItem != null && DropTarget.HasValue)
+        if (IsDragging && DraggingItem != null && FinalDropTarget.HasValue)
         {
-            var (col, row) = DropTarget.Value;
+            var (col, row) = FinalDropTarget.Value;
             await SimplePlaceItem(DraggingItem, col, row);
         }
-
         CleanUpDrag();
     }
-
     private void CleanUpDrag()
     {
         IsDragging = false;
         DraggingItem = null;
-        DropTarget = null;
-        DragStartInfo = null;
+        HoverTarget = null;
+        FinalDropTarget = null;
+        DragStartMouse = null;
+        DragStartCell = null;
         DragCursorClass = null;
         StateHasChanged();
     }
-
-    // ============ SISTEMA SIMPLE PERO EFECTIVO ============
 
     private bool ItemsCollide(GridItem item1, int col1, int row1, GridItem item2)
     {
@@ -164,37 +172,29 @@ public partial class DraggableGrid
 
     private async Task SimplePlaceItem(GridItem item, int targetCol, int targetRow)
     {
-        // Ajustar límites
         targetCol = Math.Max(1, Math.Min(targetCol, Layout.Columns - item.ColumnSpan + 1));
         targetRow = Math.Max(1, Math.Min(targetRow, Layout.Rows - item.RowSpan + 1));
 
-        // Si está en la misma posición, no hacer nada
         if (item.Column == targetCol && item.Row == targetRow)
             return;
 
-        // Calcular dirección
         int deltaCol = targetCol - item.Column;
         int deltaRow = targetRow - item.Row;
 
-        // Guardar estado original
         var originalPositions = Layout.Items.ToDictionary(i => i.Id, i => (i.Column, i.Row));
 
-        // Paso 1: Mover el item a la posición objetivo
         item.Column = targetCol;
         item.Row = targetRow;
 
-        // Paso 2: Encontrar todos los items con los que colisiona
         var collisions = GetCollisionsAt(item, targetCol, targetRow);
 
         if (collisions.Count == 0)
         {
-            // No hay colisiones, listo
             await LayoutChanged.InvokeAsync(Layout);
             StateHasChanged();
             return;
         }
 
-        // Paso 3: Procesar cada colisión según las reglas
         bool success = true;
         var processedItems = new HashSet<Guid> { item.Id };
 
@@ -209,7 +209,6 @@ public partial class DraggableGrid
 
         if (success)
         {
-            // Verificar que no haya nuevas colisiones
             bool hasNewCollisions = false;
             foreach (var gridItem in Layout.Items)
             {
@@ -228,10 +227,8 @@ public partial class DraggableGrid
             }
         }
 
-        // Si falló, revertir
         RevertToOriginalPositions(originalPositions);
 
-        // Intentar algoritmo alternativo
         await TrySwapPlacement(item, targetCol, targetRow, deltaCol, deltaRow);
     }
 
@@ -244,11 +241,9 @@ public partial class DraggableGrid
 
         processedItems.Add(collidingItem.Id);
 
-        // Calcular nueva posición según las reglas
         int newCol = collidingItem.Column;
         int newRow = collidingItem.Row;
 
-        // REGLA 1: Desplazar solo una celda en la dirección del movimiento
         if (deltaCol != 0)
         {
             newCol = collidingItem.Column + Math.Sign(deltaCol);
@@ -260,68 +255,55 @@ public partial class DraggableGrid
             newRow = collidingItem.Row + Math.Sign(deltaRow);
         }
 
-        // REGLA 2: Si toca borde, colocarse al lado contrario
         bool hitBoundary = false;
 
         if (deltaCol > 0 && newCol + collidingItem.ColumnSpan - 1 > Layout.Columns)
         {
-            // Movimiento a derecha, toca borde derecho
             newCol = pushingItem.Column - collidingItem.ColumnSpan;
             hitBoundary = true;
         }
         else if (deltaCol < 0 && newCol < 1)
         {
-            // Movimiento a izquierda, toca borde izquierdo
             newCol = pushingItem.Column + pushingItem.ColumnSpan;
             hitBoundary = true;
         }
         else if (deltaRow > 0 && newRow + collidingItem.RowSpan - 1 > Layout.Rows)
         {
-            // Movimiento abajo, toca borde inferior
             newRow = pushingItem.Row - collidingItem.RowSpan;
             hitBoundary = true;
         }
         else if (deltaRow < 0 && newRow < 1)
         {
-            // Movimiento arriba, toca borde superior
             newRow = pushingItem.Row + pushingItem.RowSpan;
             hitBoundary = true;
         }
 
-        // Ajustar límites
         newCol = Math.Max(1, Math.Min(newCol, Layout.Columns - collidingItem.ColumnSpan + 1));
         newRow = Math.Max(1, Math.Min(newRow, Layout.Rows - collidingItem.RowSpan + 1));
 
-        // Guardar posición original de este item
         int originalCol = collidingItem.Column;
         int originalRow = collidingItem.Row;
 
-        // Mover a la nueva posición
         collidingItem.Column = newCol;
         collidingItem.Row = newRow;
 
-        // Verificar si hay colisiones en la nueva posición
         var newCollisions = GetCollisionsAt(collidingItem, newCol, newRow)
             .Where(c => !processedItems.Contains(c.Id))
             .ToList();
 
-        // REGLA 3: Si colisiona con otro, procesar esa colisión también
         foreach (var newCollision in newCollisions)
         {
             if (!await ProcessCollision(newCollision, collidingItem,
                                       deltaCol, deltaRow, processedItems, originalPositions))
             {
-                // Revertir este movimiento
                 collidingItem.Column = originalCol;
                 collidingItem.Row = originalRow;
                 return false;
             }
         }
 
-        // Si llegamos a un borde y aún hay colisión, buscar posición alternativa
         if (hitBoundary && HasCollision(collidingItem, newCol, newRow))
         {
-            // Buscar espacio libre cerca
             if (!FindAlternativePosition(collidingItem, pushingItem, newCol, newRow, deltaCol, deltaRow))
             {
                 collidingItem.Column = originalCol;
@@ -329,7 +311,6 @@ public partial class DraggableGrid
                 return false;
             }
 
-            // Verificar colisiones en la nueva posición alternativa
             newCollisions = GetCollisionsAt(collidingItem, collidingItem.Column, collidingItem.Row)
                 .Where(c => !processedItems.Contains(c.Id))
                 .ToList();
@@ -353,15 +334,11 @@ public partial class DraggableGrid
                                        int preferredCol, int preferredRow,
                                        int deltaCol, int deltaRow)
     {
-        // Guardar posición original
         int originalCol = item.Column;
         int originalRow = item.Row;
 
-        // Estrategia 1: Buscar en la dirección perpendicular
         if (deltaCol != 0)
         {
-            // Movimiento horizontal, buscar verticalmente
-            // Primero hacia abajo
             for (int rowOffset = 1; rowOffset <= Layout.Rows; rowOffset++)
             {
                 int testRow = preferredRow + rowOffset;
@@ -373,7 +350,6 @@ public partial class DraggableGrid
                     return true;
                 }
 
-                // Luego hacia arriba
                 testRow = preferredRow - rowOffset;
                 if (testRow >= 1 &&
                     !HasCollision(item, preferredCol, testRow, new List<Guid> { pushingItem.Id }))
@@ -386,8 +362,6 @@ public partial class DraggableGrid
         }
         else if (deltaRow != 0)
         {
-            // Movimiento vertical, buscar horizontalmente
-            // Primero a la derecha
             for (int colOffset = 1; colOffset <= Layout.Columns; colOffset++)
             {
                 int testCol = preferredCol + colOffset;
@@ -399,7 +373,6 @@ public partial class DraggableGrid
                     return true;
                 }
 
-                // Luego a la izquierda
                 testCol = preferredCol - colOffset;
                 if (testCol >= 1 &&
                     !HasCollision(item, testCol, preferredRow, new List<Guid> { pushingItem.Id }))
@@ -411,7 +384,6 @@ public partial class DraggableGrid
             }
         }
 
-        // Estrategia 2: Buscar en cualquier posición libre
         for (int row = 1; row <= Layout.Rows - item.RowSpan + 1; row++)
         {
             for (int col = 1; col <= Layout.Columns - item.ColumnSpan + 1; col++)
@@ -425,7 +397,6 @@ public partial class DraggableGrid
             }
         }
 
-        // No se encontró posición
         item.Column = originalCol;
         item.Row = originalRow;
         return false;
@@ -433,25 +404,19 @@ public partial class DraggableGrid
 
     private async Task TrySwapPlacement(GridItem item, int targetCol, int targetRow, int deltaCol, int deltaRow)
     {
-        // Algoritmo de intercambio simple
-        // Buscar el item en la posición objetivo
         var itemAtTarget = FindItemAtPosition(targetCol, targetRow);
 
         if (itemAtTarget != null && itemAtTarget.Id != item.Id)
         {
-            // Intentar intercambiar posiciones
             int tempCol = item.Column;
             int tempRow = item.Row;
 
-            // Mover el item objetivo a la posición original del item
             itemAtTarget.Column = tempCol;
             itemAtTarget.Row = tempRow;
 
-            // Mover el item a la posición objetivo
             item.Column = targetCol;
             item.Row = targetRow;
 
-            // Verificar que no haya colisiones
             bool hasCollisions = false;
             foreach (var gridItem in Layout.Items)
             {
@@ -470,7 +435,6 @@ public partial class DraggableGrid
             }
             else
             {
-                // Revertir el intercambio
                 itemAtTarget.Column = targetCol;
                 itemAtTarget.Row = targetRow;
                 item.Column = tempCol;
@@ -478,7 +442,6 @@ public partial class DraggableGrid
             }
         }
 
-        // Si el intercambio no funciona, buscar posición cercana
         await FindClosestFreePosition(item, targetCol, targetRow);
     }
 
@@ -491,7 +454,6 @@ public partial class DraggableGrid
 
     private async Task FindClosestFreePosition(GridItem item, int targetCol, int targetRow)
     {
-        // Buscar la posición válida más cercana usando BFS
         var visited = new HashSet<(int, int)>();
         var queue = new Queue<(int col, int row, int distance)>();
 
@@ -511,7 +473,6 @@ public partial class DraggableGrid
                 return;
             }
 
-            // Agregar vecinos
             var neighbors = new[]
             {
                 (col + 1, row), (col - 1, row),
@@ -543,8 +504,6 @@ public partial class DraggableGrid
         }
     }
 
-    // ============ MOVIMIENTO CON TECLADO ============
-
     private async Task MoveSelectedItem(int deltaCol, int deltaRow)
     {
         if (SelectedItem == null)
@@ -555,8 +514,6 @@ public partial class DraggableGrid
 
         await SimplePlaceItem(SelectedItem, newCol, newRow);
     }
-
-    // ============ MÉTODOS DE INTERFAZ ============
 
     private async Task SelectItem(GridItem item)
     {
@@ -773,16 +730,5 @@ public partial class DraggableGrid
     {
         SelectedItem = null;
         StateHasChanged();
-    }
-
-    private bool IsDropTargetCell(int col, int row)
-    {
-        if (!IsDragging || DropTarget is null)
-            return false;
-
-        var (targetCol, targetRow) = DropTarget.Value;
-
-        // Solo resaltar la celda EXACTA donde empieza el item (esquina superior izquierda)
-        return col == targetCol && row == targetRow;
     }
 }

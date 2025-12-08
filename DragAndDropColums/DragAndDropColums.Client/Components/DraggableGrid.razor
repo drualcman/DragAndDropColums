@@ -4,10 +4,9 @@
 
 <div class="draggable-grid-container @DragCursorClass"
      @onkeydown=HandleKeyDown
-     @onmousemove=HandleMouseMove
      @onmouseup=HandleMouseUp
      @onmouseleave=CleanUpDrag
-     tabindex="0" @ref="containerRef">
+     tabindex="0">
 
     <div class="grid-controls">
         <button @onclick="AddNewItem" class="btn btn-primary">➕ Agregar Elemento</button>
@@ -70,22 +69,22 @@
     }
 
     <!-- Grid principal -->
-    <div class="draggable-grid" style="@GetGridStyle()">
+    <div class="draggable-grid"
+         style="@GetGridStyle()"
+         @onmousemove=HandleMouseMove>
         <!-- Celdas de la grid -->
         @for (int row = 1; row <= Layout.Rows; row++)
         {
             @for (int col = 1; col <= Layout.Columns; col++)
             {
-                bool isDropTarget = DropTarget?.Col == col && DropTarget?.Row == row;
-
-                <!-- En el bucle de celdas, reemplaza esta línea: -->
-                <div class="grid-cell @(IsDropTargetCell(col, row) ? "drop-target" : "")"
+                bool isHoverTarget = HoverTarget?.Col == col && HoverTarget?.Row == row;
+                <div class="grid-cell @(isHoverTarget ? "drop-target" : "")"
                      @onclick:preventDefault
                      @onclick="@(() => CellClicked(col, row))">
                     <small>@col,@row</small>
-                    @if (IsDropTargetCell(col, row) && IsDragging)
+                    @if (isHoverTarget && IsDragging)
                     {
-                        <div class="drop-indicator">Place</div>
+                        <div class="drop-indicator">Drop</div>
                     }
                 </div>
             }
