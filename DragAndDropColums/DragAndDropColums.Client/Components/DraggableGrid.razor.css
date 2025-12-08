@@ -144,41 +144,50 @@
     }
 
     .grid-cell.drop-target {
-        background: rgba(0, 123, 255, 0.2) !important;
-        border: 2px solid #007bff !important;
-        animation: pulse 1s infinite;
+        background: rgba(0, 183, 255, 0.25) !important;
+        border: 3px solid #00b7ff !important;
+        box-shadow: 0 0 0 3px rgba(0, 183, 255, 0.3) !important;
+        z-index: 99;
+        position: relative;
+        animation: dropPulse 1.2s ease-in-out infinite;
     }
 
-@keyframes pulse {
-    0% {
-        box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.4);
+@keyframes dropPulse {
+    0%, 100% {
+        box-shadow: 0 0 0 3px rgba(0, 183, 255, 0.3);
+        transform: scale(1);
     }
 
-    70% {
-        box-shadow: 0 0 0 6px rgba(0, 123, 255, 0);
-    }
-
-    100% {
-        box-shadow: 0 0 0 0 rgba(0, 123, 255, 0);
+    50% {
+        box-shadow: 0 0 0 8px rgba(0, 183, 255, 0.1);
+        transform: scale(1.02);
     }
 }
 
 .drop-indicator {
     position: absolute;
-    bottom: 2px;
-    right: 2px;
-    font-size: 12px;
-    color: #007bff;
-    animation: bounce 0.5s infinite alternate;
+    top: 4px;
+    right: 4px;
+    background: #00b7ff;
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 100;
+    animation: fadeIn 0.3s;
 }
 
-@keyframes bounce {
+@keyframes fadeIn {
     from {
-        transform: translateY(0);
+        opacity: 0;
+        transform: scale(0.5);
     }
 
     to {
-        transform: translateY(-3px);
+        opacity: 1;
+        transform: scale(1);
     }
 }
 

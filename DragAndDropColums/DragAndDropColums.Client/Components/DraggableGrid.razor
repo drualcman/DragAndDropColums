@@ -78,13 +78,14 @@
             {
                 bool isDropTarget = DropTarget?.Col == col && DropTarget?.Row == row;
 
-                <div class="grid-cell @(isDropTarget ? "drop-target" : "")"
+                <!-- En el bucle de celdas, reemplaza esta línea: -->
+                <div class="grid-cell @(IsDropTargetCell(col, row) ? "drop-target" : "")"
                      @onclick:preventDefault
                      @onclick="@(() => CellClicked(col, row))">
                     <small>@col,@row</small>
-                    @if (isDropTarget && IsDragging)
+                    @if (IsDropTargetCell(col, row) && IsDragging)
                     {
-                        <div class="drop-indicator">⬇</div>
+                        <div class="drop-indicator">Place</div>
                     }
                 </div>
             }
