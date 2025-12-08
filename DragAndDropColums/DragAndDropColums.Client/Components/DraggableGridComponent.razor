@@ -1,0 +1,104 @@
+﻿@* DraggableGrid.razor *@
+@namespace DragAndDropColums.Client.Components
+@using System.Text.Json
+
+<div class="draggable-grid-container @DragCursorClass"
+     @onkeydown=HandleKeyDown
+     @onmouseup=HandleMouseUp
+     @onmouseleave=CleanUpDrag
+     tabindex="0">
+
+    <!-- Grid principal -->
+    <!-- Reemplaza la sección de celdas y elementos con esto: -->
+
+    <div class="draggable-grid"
+         style="@GetGridStyle()"
+         @onmousemove=HandleMouseMove>
+
+        <!-- Dibujamos todas las celdas, pero las ocupadas son invisibles -->
+        @for (int row = 1; row <= Layout.Rows; row++)
+        {
+            @for (int col = 1; col <= Layout.Columns; col++)
+            {
+                bool isCorner = false;
+                string cornerClass = "";
+
+                if (IsDragging && DraggingItem != null && FinalDropTarget.HasValue)
+                {
+                    isCorner = IsDropAreaCorner(col, row, DraggingItem, FinalDropTarget.Value);
+                    if (isCorner)
+                    {
+                        cornerClass = "drop-area-corner";
+                    }
+                }
+
+                bool isOccupied = _occupiedCells.Contains((col, row));
+
+                // Calcula si esta celda está en el área de drop del elemento que se está arrastrando
+                bool isInDropArea = false;
+                if (IsDragging && DraggingItem != null && FinalDropTarget.HasValue)
+                {
+                    var dropCells = GetItemCells(DraggingItem, FinalDropTarget.Value.Col, FinalDropTarget.Value.Row);
+                    isInDropArea = dropCells.Contains((col, row));
+                    var target = FinalDropTarget.Value;
+                    <div class="drop-area-highlight"
+                         style="grid-column: @target.Col / span @DraggingItem.ColumnSpan;
+                            grid-row: @target.Row / span @DraggingItem.RowSpan;
+                            pointer-events: none;">
+                    </div>
+                }
+
+                <div class="grid-cell @(isInDropArea ? "drop-target" : "") @cornerClass"
+                     style="grid-column: @col; grid-row: @row; @(isOccupied && !isInDropArea ? "visibility: hidden;" : "")"
+                     @onclick:preventDefault
+                     @onclick="@(() => CellClicked(col, row))">
+                    <small>@col,@row</small>
+                    @if (isInDropArea && IsDragging)
+                    {
+                        <div class="drop-indicator">Drop</div>
+                    }
+                </div>
+            }
+        }
+
+        <!-- Elementos encima -->
+        @foreach (var item in Layout.Items.OrderBy(i => i.Row).ThenBy(i => i.Column))
+        {
+            <div class="grid-item"
+                 style="@GetItemStyle(item)"
+                 @onmousedown="@((e) => StartMouseDrag(e, item))"
+                 @onclick:preventDefault
+                 @onclick="@(() => SelectItem(item))">
+
+                <div class="item-header">
+                    <span class="item-id">📦 @item.Id.ToString().Substring(0, 4)</span>
+                    <span class="item-position">(@item.Column,@item.Row)</span>
+                </div>
+
+                <div class="item-content">
+                    @if (string.IsNullOrEmpty(item.Content))
+                    {
+                        <em>Click para seleccionar</em>
+                    }
+                    else
+                    {
+                        @item.Content
+                    }
+                </div>
+
+                <div class="item-footer">
+                    <div class="item-size">
+                        <small>@item.ColumnSpan×@item.RowSpan</small>
+                    </div>
+                    @if (SelectedItem?.Id == item.Id)
+                    {
+                        <div class="selected-indicator">★</div>
+                    }
+                </div>
+            </div>
+        }
+
+    </div>
+
+</div>
+

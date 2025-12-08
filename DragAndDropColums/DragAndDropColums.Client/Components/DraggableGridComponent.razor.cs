@@ -1,9 +1,8 @@
 using Microsoft.AspNetCore.Components.Web;
-using System.Text.Json;
 
 namespace DragAndDropColums.Client.Components;
 
-public partial class DraggableGrid
+public partial class DraggableGridComponent
 {
     [Parameter] public GridLayout Layout { get; set; } = new();
     [Parameter] public EventCallback<GridLayout> LayoutChanged { get; set; }
@@ -18,12 +17,13 @@ public partial class DraggableGrid
     private (int Col, int Row)? HoverTarget { get; set; }
     private (int Col, int Row)? FinalDropTarget { get; set; }
 
-    protected override void OnInitialized()
+    protected override void OnParametersSet()
     {
         if (Layout.Items.Any() && SelectedItem == null)
         {
             SelectedItem = Layout.Items.First();
         }
+        UpdateOccupiedCells();
     }
 
     private string GetGridStyle()
@@ -714,127 +714,6 @@ public partial class DraggableGrid
         }
     }
 
-    private void ResizeItemWidth(GridItem item, int delta)
-    {
-        int newColSpan = item.ColumnSpan + delta;
-
-        if (newColSpan < 1)
-        {
-            newColSpan = 1;
-        }
-
-        if (newColSpan > Layout.Columns)
-        {
-            newColSpan = Layout.Columns;
-        }
-
-        if (item.Column + newColSpan - 1 > Layout.Columns)
-        {
-            return;
-        }
-
-        int originalColSpan = item.ColumnSpan;
-        item.ColumnSpan = newColSpan;
-
-        if (HasCollision(item, item.Column, item.Row))
-        {
-            item.ColumnSpan = originalColSpan;
-            return;
-        }
-
-        LayoutChanged.InvokeAsync(Layout);
-        StateHasChanged();
-    }
-
-    private void ResizeItemHeight(GridItem item, int delta)
-    {
-        int newRowSpan = item.RowSpan + delta;
-
-        if (newRowSpan < 1)
-        {
-            newRowSpan = 1;
-        }
-
-        if (newRowSpan > Layout.Rows)
-        {
-            newRowSpan = Layout.Rows;
-        }
-
-        if (item.Row + newRowSpan - 1 > Layout.Rows)
-        {
-            return;
-        }
-
-        int originalRowSpan = item.RowSpan;
-        item.RowSpan = newRowSpan;
-
-        if (HasCollision(item, item.Column, item.Row))
-        {
-            item.RowSpan = originalRowSpan;
-            return;
-        }
-
-        LayoutChanged.InvokeAsync(Layout);
-        StateHasChanged();
-    }
-
-    private void AddNewItem()
-    {
-        string[] colors = new string[] { "#FFCCCC", "#CCFFCC", "#CCCCFF", "#FFFFCC", "#FFCCFF", "#CCFFFF" };
-
-        GridItem newItem = new GridItem
-        {
-            Content = "Elemento " + (Layout.Items.Count + 1),
-            Column = 1,
-            Row = 1,
-            ColumnSpan = 2,
-            RowSpan = 2,
-            BackgroundColor = colors[Layout.Items.Count % colors.Length]
-        };
-
-        bool placed = false;
-        for (int row = 1; row <= Layout.Rows && !placed; row++)
-        {
-            for (int col = 1; col <= Layout.Columns && !placed; col++)
-            {
-                if (col + newItem.ColumnSpan - 1 <= Layout.Columns &&
-                    row + newItem.RowSpan - 1 <= Layout.Rows &&
-                    !HasCollision(newItem, col, row))
-                {
-                    newItem.Column = col;
-                    newItem.Row = row;
-                    Layout.Items.Add(newItem);
-                    SelectedItem = newItem;
-                    placed = true;
-                }
-            }
-        }
-
-        if (!placed)
-        {
-            newItem.ColumnSpan = 1;
-            newItem.RowSpan = 1;
-
-            for (int row = 1; row <= Layout.Rows && !placed; row++)
-            {
-                for (int col = 1; col <= Layout.Columns && !placed; col++)
-                {
-                    if (!HasCollision(newItem, col, row))
-                    {
-                        newItem.Column = col;
-                        newItem.Row = row;
-                        Layout.Items.Add(newItem);
-                        SelectedItem = newItem;
-                        placed = true;
-                    }
-                }
-            }
-        }
-
-        LayoutChanged.InvokeAsync(Layout);
-        StateHasChanged();
-    }
-
     private void RemoveItem(GridItem item)
     {
         Layout.Items.Remove(item);
@@ -846,25 +725,45 @@ public partial class DraggableGrid
         LayoutChanged.InvokeAsync(Layout);
         StateHasChanged();
     }
-
-    private void ResetGrid()
+    private HashSet<(int, int)> _occupiedCells = new();
+    private void UpdateOccupiedCells()
     {
-        Layout.Items.Clear();
-        LayoutChanged.InvokeAsync(Layout);
-        SelectedItem = null;
-        StateHasChanged();
+        _occupiedCells.Clear();
+        foreach (var item in Layout.Items)
+        {
+            for (int r = item.Row; r < item.Row + item.RowSpan; r++)
+            {
+                for (int c = item.Column; c < item.Column + item.ColumnSpan; c++)
+                {
+                    _occupiedCells.Add((c, r));
+                }
+            }
+        }
     }
 
-    private void SaveLayout()
+    private HashSet<(int, int)> GetItemCells(GridItem item, int? targetCol = null, int? targetRow = null)
     {
-        string json = JsonSerializer.Serialize(Layout, new JsonSerializerOptions { WriteIndented = true });
-        Console.WriteLine("Layout guardado:");
-        Console.WriteLine(json);
+        var cells = new HashSet<(int, int)>();
+        int startCol = targetCol ?? item.Column;
+        int startRow = targetRow ?? item.Row;
+
+        for (int r = startRow; r < startRow + item.RowSpan; r++)
+        {
+            for (int c = startCol; c < startCol + item.ColumnSpan; c++)
+            {
+                cells.Add((c, r));
+            }
+        }
+
+        return cells;
     }
 
-    private void CloseEditor()
+    // Método para determinar si una celda es una esquina del área de drop
+    private bool IsDropAreaCorner(int col, int row, GridItem item, (int Col, int Row) target)
     {
-        SelectedItem = null;
-        StateHasChanged();
+        return (col == target.Col && row == target.Row) || // Esquina superior izquierda
+               (col == target.Col + item.ColumnSpan - 1 && row == target.Row) || // Esquina superior derecha
+               (col == target.Col && row == target.Row + item.RowSpan - 1) || // Esquina inferior izquierda
+               (col == target.Col + item.ColumnSpan - 1 && row == target.Row + item.RowSpan - 1); // Esquina inferior derecha
     }
 }

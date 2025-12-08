@@ -3,17 +3,17 @@
 <PageTitle>Grid Dinámico - Demo</PageTitle>
 
 <div class="demo-container">
-    <h1>🏗️ Grid Dinámico Interactivo</h1>
+    @* <h1>🏗️ Grid Dinámico Interactivo</h1>
     <p class="lead">Organiza elementos en una grid con diferentes tamaños y posiciones</p>
+     *@
+    <DraggableGridComponent @bind-Layout="gridLayout" />
     
-    <DraggableGrid @bind-Layout="gridLayout" />
-    
-    <div class="demo-info">
+    @* <div class="demo-info">
         <h3>📊 Información del Layout</h3>
         <p><strong>Elementos:</strong> @gridLayout.Items.Count</p>
         <p><strong>Grid:</strong> @gridLayout.Columns × @gridLayout.Rows</p>
         <button @onclick="ExportLayout" class="btn btn-info">📤 Exportar JSON</button>
-    </div>
+    </div> *@
 </div>
 
 @code {
