@@ -2,16 +2,11 @@
 
 public class GridItem
 {
-    public int Id { get; set; }
-    public string Title { get; set; } = "";
-
-    // Posición lógica (fila y columna donde empieza)
-    public int Row { get; set; }
-    public int Column { get; set; }  // siempre 1 o 2
-
-    // ¿Ocupa las 2 columnas?
-    public bool IsFullWidth { get; set; } = false;
-
-    // Orden visual (importante para el rendering)
-    public int Order { get; set; }
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Content { get; set; } = "";
+    public int Column { get; set; } = 1;
+    public int Row { get; set; } = 1;
+    public int ColumnSpan { get; set; } = 1;
+    public int RowSpan { get; set; } = 1;
+    public string BackgroundColor { get; set; } = "#e0e0e0";
 }

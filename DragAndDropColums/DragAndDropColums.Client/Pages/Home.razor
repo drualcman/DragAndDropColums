@@ -1,32 +1,80 @@
-﻿@page "/"
+﻿@* Pages/GridDemo.razor *@
+@page "/"
 
-<PageTitle>Drag & Drop Grid - Simple</PageTitle>
+@* Pages/GridDemo.razor *@
+@page "/grid-demo"
 
-<h1>Grid con Drag & Drop Simple</h1>
 
-<GridDraggable Layout="layout" />
+<PageTitle>Grid Dinámico - Demo</PageTitle>
+
+<div class="demo-container">
+    <h1>🏗️ Grid Dinámico Interactivo</h1>
+    <p class="lead">Organiza elementos en una grid con diferentes tamaños y posiciones</p>
+    
+    <DraggableGrid @bind-Layout="gridLayout" />
+    
+    <div class="demo-info">
+        <h3>📊 Información del Layout</h3>
+        <p><strong>Elementos:</strong> @gridLayout.Items.Count</p>
+        <p><strong>Grid:</strong> @gridLayout.Columns × @gridLayout.Rows</p>
+        <button @onclick="ExportLayout" class="btn btn-info">📤 Exportar JSON</button>
+    </div>
+</div>
 
 @code {
-    private GridLayout layout = new();
-
-    protected override void OnInitialized()
+    private GridLayout gridLayout = new()
     {
-        ResetGrid();
-    }
-
-    private void ResetGrid()
-    {
-        layout.Items = new List<GridItem>
+        Columns = 8,
+        Rows = 10,
+        Items = new List<GridItem>
         {
-            new GridItem { Id = 1, Title = "A", Row = 0, Column = 1, IsFullWidth = false },
-            new GridItem { Id = 2, Title = "B", Row = 0, Column = 2, IsFullWidth = false },
-            new GridItem { Id = 3, Title = "C", Row = 1, Column = 1, IsFullWidth = false },
-            new GridItem { Id = 4, Title = "D", Row = 1, Column = 2, IsFullWidth = false },
-            new GridItem { Id = 5, Title = "FULL 1", Row = 2, Column = 1, IsFullWidth = true },
-            new GridItem { Id = 6, Title = "E", Row = 3, Column = 1, IsFullWidth = false },
-            new GridItem { Id = 7, Title = "F", Row = 3, Column = 2, IsFullWidth = false }
-        };
+            new() { 
+                Column = 1, 
+                Row = 1, 
+                ColumnSpan = 2, 
+                RowSpan = 2, 
+                Content = "Título Principal", 
+                BackgroundColor = "#FFCCCC" 
+            },
+            new() { 
+                Column = 4, 
+                Row = 1, 
+                ColumnSpan = 3, 
+                RowSpan = 1, 
+                Content = "Subtítulo o descripción breve", 
+                BackgroundColor = "#CCFFCC" 
+            },
+            new() { 
+                Column = 1, 
+                Row = 4, 
+                ColumnSpan = 4, 
+                RowSpan = 3, 
+                Content = "Contenido principal que puede ser más largo y ocupar múltiples celdas. Ideal para mostrar información detallada.", 
+                BackgroundColor = "#CCCCFF" 
+            },
+            new() { 
+                Column = 6, 
+                Row = 3, 
+                ColumnSpan = 2, 
+                RowSpan = 4, 
+                Content = "Panel lateral o sidebar con información adicional", 
+                BackgroundColor = "#FFFFCC" 
+            },
+        }
+    };
+    
+    private void ExportLayout()
+    {
+        var json = JsonSerializer.Serialize(gridLayout, new JsonSerializerOptions 
+        { 
+            WriteIndented = true 
+        });
         
+        // En una aplicación real, podrías:
+        // 1. Copiar al portapapeles
+        // 2. Mostrar en un modal
+        // 3. Descargar como archivo
+        Console.WriteLine("JSON exportado:");
+        Console.WriteLine(json);
     }
-
 }

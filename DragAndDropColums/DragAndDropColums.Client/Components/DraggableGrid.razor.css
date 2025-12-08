@@ -1,0 +1,151 @@
+﻿/* Agregar esto a tu CSS existente */
+
+/* Estilo para elemento seleccionado */
+.grid-item {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+    .grid-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    }
+
+    /* Elemento seleccionado - borde azul brillante */
+    .grid-item[style*="border: 3px solid #007bff"] {
+        box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.3), 0 8px 30px rgba(0,0,0,0.2);
+        z-index: 100;
+    }
+
+    /* Elemento siendo arrastrado - borde rojo punteado */
+    .grid-item[style*="border: 3px dashed #ff6b6b"] {
+        cursor: grabbing !important;
+        box-shadow: 0 10px 40px rgba(255, 107, 107, 0.3);
+        z-index: 101;
+    }
+
+/* Feedback visual durante el arrastre */
+.draggable-grid-container.dragging {
+    cursor: grabbing;
+}
+
+/* Botones de resize */
+.resize-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.btn-resize {
+    background: #6c757d;
+    color: white;
+    padding: 8px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+
+    .btn-resize:hover {
+        background: #5a6268;
+        transform: scale(1.05);
+    }
+
+/* Información del elemento seleccionado */
+.selected-item-info {
+    margin-left: auto;
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    background: rgba(255,255,255,0.2);
+    padding: 10px 20px;
+    border-radius: 8px;
+    flex-wrap: wrap;
+}
+
+    .selected-item-info span {
+        font-weight: bold;
+    }
+
+/* Celdas de la grid */
+.grid-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    font-size: 10px;
+    color: #6c757d;
+    user-select: none;
+    transition: all 0.2s;
+}
+
+    .grid-cell:hover {
+        background: #f8f9fa;
+        border-color: #007bff;
+    }
+
+/* Mejorar la visibilidad del contenido */
+.item-content {
+    font-size: 14px;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-height: 100px;
+}
+
+/* Header del item más compacto */
+.item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+}
+
+.item-id {
+    font-size: 11px;
+    font-weight: bold;
+    color: #555;
+}
+
+.item-position {
+    font-size: 10px;
+    color: #777;
+    background: rgba(0,0,0,0.05);
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+
+/* Footer más pequeño */
+.item-footer {
+    margin-top: auto;
+    padding-top: 5px;
+    border-top: 1px solid rgba(0,0,0,0.1);
+    font-size: 10px;
+    color: #666;
+}
+
+/* Instrucciones más claras */
+.grid-instructions {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+    margin: 15px 0;
+}
+
+    .grid-instructions ul {
+        margin: 10px 0 0 0;
+        padding-left: 20px;
+    }
+
+    .grid-instructions li {
+        margin: 8px 0;
+        line-height: 1.4;
+    }
