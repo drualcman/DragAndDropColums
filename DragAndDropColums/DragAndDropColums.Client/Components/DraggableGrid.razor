@@ -2,11 +2,12 @@
 @namespace DragAndDropColums.Client.Components
 @using System.Text.Json
 
-<div class="draggable-grid-container"
+<div class="draggable-grid-container @DragCursorClass"
      @onkeydown="HandleKeyDown"
      @onmousemove="HandleMouseMove"
      @onmouseup="HandleMouseUp"
-     @onmouseleave="CleanUpDrag">
+     @onmouseleave="CleanUpDrag"
+     tabindex="0" @ref="containerRef">
 
     <div class="grid-controls">
         <button @onclick="AddNewItem" class="btn btn-primary">➕ Agregar Elemento</button>
@@ -27,10 +28,12 @@
         {
             <div class="selected-item-info">
                 <strong>Seleccionado:</strong>
-                <span style="background-color: @SelectedItem.BackgroundColor; padding: 2px 6px; border-radius: 4px;">
+                <span class="selected-item-label" style="background-color: @SelectedItem.BackgroundColor;">
                     @SelectedItem.Content
                 </span>
-                <span>(@SelectedItem.Column,@SelectedItem.Row) - Tamaño: @SelectedItem.ColumnSpan×@SelectedItem.RowSpan</span>
+                <span class="selected-item-details">
+                    (@SelectedItem.Column,@SelectedItem.Row) - Tamaño: @SelectedItem.ColumnSpan×@SelectedItem.RowSpan
+                </span>
                 <button @onclick="@(() => RemoveItem(SelectedItem))" class="btn-danger">🗑️ Eliminar</button>
             </div>
         }
@@ -39,18 +42,18 @@
     <div class="grid-instructions">
         <p>🎯 <strong>Instrucciones:</strong></p>
         <ul>
-            <li>🖱️ <strong>Click</strong> para seleccionar un elemento</li>
-            <li>🖱️ <strong>Click y arrastra</strong> para mover elementos</li>
+            <li>🖱️ <strong>Click</strong> para seleccionar un elemento (borde azul)</li>
+            <li>🖱️ <strong>Click y arrastra</strong> para mover elementos (borde rojo punteado)</li>
             <li>⬅️➡️⬆️⬇️ Usa <strong>flechas del teclado</strong> para mover el seleccionado</li>
             <li>❌ Usa <strong>Delete</strong> para eliminar el elemento seleccionado</li>
-            <li>ESC para deseleccionar</li>
+            <li>ESC para deseleccionar, ESPACIO para alternar selección</li>
         </ul>
     </div>
 
     @if (SelectedItem != null)
     {
         <div class="movement-controls">
-            <h4>Mover Elemento Seleccionado:</h4>
+            <h4>📦 Control del Elemento Seleccionado:</h4>
             <div class="movement-buttons">
                 <button @onclick="@(() => MoveSelectedItem(0, -1))" class="btn-move">⬆️ Arriba</button>
                 <button @onclick="@(() => MoveSelectedItem(-1, 0))" class="btn-move">⬅️ Izquierda</button>
@@ -73,9 +76,15 @@
         {
             @for (int col = 1; col <= Layout.Columns; col++)
             {
-                <div class="grid-cell"
+                bool isDropTarget = DropTarget?.Col == col && DropTarget?.Row == row;
+
+                <div class="grid-cell @(isDropTarget ? "drop-target" : "")"
                      @onclick="@(() => CellClicked(col, row))">
                     <small>@col,@row</small>
+                    @if (isDropTarget && IsDragging)
+                    {
+                        <div class="drop-indicator">⬇</div>
+                    }
                 </div>
             }
         }
@@ -108,6 +117,10 @@
                     <div class="item-size">
                         <small>@item.ColumnSpan×@item.RowSpan</small>
                     </div>
+                    @if (SelectedItem?.Id == item.Id)
+                    {
+                        <div class="selected-indicator">★</div>
+                    }
                 </div>
             </div>
         }
@@ -153,3 +166,7 @@
         </div>
     }
 </div>
+
+@code {
+    private ElementReference containerRef;
+}
