@@ -27,7 +27,7 @@ public partial class DraggableGrid
 
     private string GetGridStyle()
     {
-        return $"display: grid; " +
+        return "display: grid; " +
                $"grid-template-columns: repeat({Layout.Columns}, {Layout.CellSize}px); " +
                $"grid-template-rows: repeat({Layout.Rows}, {Layout.CellSize}px); " +
                $"gap: {Layout.Gap}px; " +
@@ -67,39 +67,106 @@ public partial class DraggableGrid
 
         StateHasChanged();
     }
+
     private void HandleMouseMove(MouseEventArgs e)
     {
+        // If we are not dragging, do nothing.
         if (!IsDragging || DraggingItem == null || !DragStartMouse.HasValue || !DragStartCell.HasValue)
+        {
             return;
+        }
 
-        var (startX, startY) = DragStartMouse.Value;
-        var (startCol, startRow) = DragStartCell.Value;
+        (int startX, int startY) = DragStartMouse.Value;
+        (int startCol, int startRow) = DragStartCell.Value;
 
         int deltaX = (int)e.ClientX - startX;
         int deltaY = (int)e.ClientY - startY;
         int cellSizeWithGap = Layout.CellSize + Layout.Gap;
 
-        // Solo procesar si se movió lo suficiente
+        // Only process if mouse moved enough to avoid jitter.
         if (Math.Abs(deltaX) < 8 && Math.Abs(deltaY) < 8)
+        {
             return;
+        }
 
-        // Cálculo correcto con Math.Round (el más natural)
-        int deltaCol = (int)Math.Round(deltaX / (double)cellSizeWithGap);
-        int deltaRow = (int)Math.Round(deltaY / (double)cellSizeWithGap);
+        // Compute delta columns and rows using directional floor/ceiling:
+        // - For positive movement use Floor so small movements do not round up prematurely.
+        // - For negative movement use Ceiling so small negative movements do not round down prematurely.
+        int deltaCol;
+        int deltaRow;
 
-        // HoverTarget: celda bajo el ratón
+        if (deltaX >= 0)
+        {
+            deltaCol = (int)Math.Floor(deltaX / (double)cellSizeWithGap);
+        }
+        else
+        {
+            deltaCol = (int)Math.Ceiling(deltaX / (double)cellSizeWithGap);
+        }
+
+        if (deltaY >= 0)
+        {
+            deltaRow = (int)Math.Floor(deltaY / (double)cellSizeWithGap);
+        }
+        else
+        {
+            deltaRow = (int)Math.Ceiling(deltaY / (double)cellSizeWithGap);
+        }
+
+        // Compute a hover target based on top-left of the dragging item.
         int hoverCol = startCol + deltaCol;
         int hoverRow = startRow + deltaRow;
-        hoverCol = Math.Max(1, Math.Min(hoverCol, Layout.Columns));
-        hoverRow = Math.Max(1, Math.Min(hoverRow, Layout.Rows));
+
+        // Clamp hover inside grid (1-based coordinates)
+        if (hoverCol < 1)
+        {
+            hoverCol = 1;
+        }
+
+        if (hoverCol > Layout.Columns)
+        {
+            hoverCol = Layout.Columns;
+        }
+
+        if (hoverRow < 1)
+        {
+            hoverRow = 1;
+        }
+
+        if (hoverRow > Layout.Rows)
+        {
+            hoverRow = Layout.Rows;
+        }
+
         HoverTarget = (hoverCol, hoverRow);
 
-        // FinalDropTarget: donde realmente cabe
+        // FinalDropTarget: where the item top-left can actually fit (prevent overflow)
         int maxCol = Layout.Columns - DraggingItem.ColumnSpan + 1;
         int maxRow = Layout.Rows - DraggingItem.RowSpan + 1;
-        int finalCol = Math.Max(1, Math.Min(hoverCol, maxCol));
-        int finalRow = Math.Max(1, Math.Min(hoverRow, maxRow));
-        FinalDropTarget = (finalCol, finalRow);
+
+        int finalColCandidate = hoverCol;
+        if (finalColCandidate < 1)
+        {
+            finalColCandidate = 1;
+        }
+
+        if (finalColCandidate > maxCol)
+        {
+            finalColCandidate = maxCol;
+        }
+
+        int finalRowCandidate = hoverRow;
+        if (finalRowCandidate < 1)
+        {
+            finalRowCandidate = 1;
+        }
+
+        if (finalRowCandidate > maxRow)
+        {
+            finalRowCandidate = maxRow;
+        }
+
+        FinalDropTarget = (finalColCandidate, finalRowCandidate);
 
         StateHasChanged();
     }
@@ -108,11 +175,13 @@ public partial class DraggableGrid
     {
         if (IsDragging && DraggingItem != null && FinalDropTarget.HasValue)
         {
-            var (col, row) = FinalDropTarget.Value;
+            (int col, int row) = FinalDropTarget.Value;
             await SimplePlaceItem(DraggingItem, col, row);
         }
+
         CleanUpDrag();
     }
+
     private void CleanUpDrag()
     {
         IsDragging = false;
@@ -135,20 +204,42 @@ public partial class DraggableGrid
 
     private bool HasCollision(GridItem item, int col, int row, List<Guid>? ignoreIds = null)
     {
-        if (col < 1 || row < 1)
-            return true;
-        if (col + item.ColumnSpan - 1 > Layout.Columns)
-            return true;
-        if (row + item.RowSpan - 1 > Layout.Rows)
-            return true;
-
-        foreach (var other in Layout.Items)
+        if (col < 1)
         {
-            if (other.Id == item.Id || (ignoreIds != null && ignoreIds.Contains(other.Id)))
+            return true;
+        }
+
+        if (row < 1)
+        {
+            return true;
+        }
+
+        if (col + item.ColumnSpan - 1 > Layout.Columns)
+        {
+            return true;
+        }
+
+        if (row + item.RowSpan - 1 > Layout.Rows)
+        {
+            return true;
+        }
+
+        foreach (GridItem other in Layout.Items)
+        {
+            if (other.Id == item.Id)
+            {
                 continue;
+            }
+
+            if (ignoreIds != null && ignoreIds.Contains(other.Id))
+            {
+                continue;
+            }
 
             if (ItemsCollide(item, col, row, other))
+            {
                 return true;
+            }
         }
 
         return false;
@@ -156,15 +247,19 @@ public partial class DraggableGrid
 
     private List<GridItem> GetCollisionsAt(GridItem item, int col, int row)
     {
-        var collisions = new List<GridItem>();
+        List<GridItem> collisions = new List<GridItem>();
 
-        foreach (var other in Layout.Items)
+        foreach (GridItem other in Layout.Items)
         {
             if (other.Id == item.Id)
+            {
                 continue;
+            }
 
             if (ItemsCollide(item, col, row, other))
+            {
                 collisions.Add(other);
+            }
         }
 
         return collisions;
@@ -172,21 +267,23 @@ public partial class DraggableGrid
 
     private async Task SimplePlaceItem(GridItem item, int targetCol, int targetRow)
     {
-        targetCol = Math.Max(1, Math.Min(targetCol, Layout.Columns - item.ColumnSpan + 1));
-        targetRow = Math.Max(1, Math.Min(targetRow, Layout.Rows - item.RowSpan + 1));
+        int boundedTargetCol = Math.Max(1, Math.Min(targetCol, Layout.Columns - item.ColumnSpan + 1));
+        int boundedTargetRow = Math.Max(1, Math.Min(targetRow, Layout.Rows - item.RowSpan + 1));
 
-        if (item.Column == targetCol && item.Row == targetRow)
+        if (item.Column == boundedTargetCol && item.Row == boundedTargetRow)
+        {
             return;
+        }
 
-        int deltaCol = targetCol - item.Column;
-        int deltaRow = targetRow - item.Row;
+        int deltaCol = boundedTargetCol - item.Column;
+        int deltaRow = boundedTargetRow - item.Row;
 
-        var originalPositions = Layout.Items.ToDictionary(i => i.Id, i => (i.Column, i.Row));
+        Dictionary<Guid, (int Column, int Row)> originalPositions = Layout.Items.ToDictionary(i => i.Id, i => (i.Column, i.Row));
 
-        item.Column = targetCol;
-        item.Row = targetRow;
+        item.Column = boundedTargetCol;
+        item.Row = boundedTargetRow;
 
-        var collisions = GetCollisionsAt(item, targetCol, targetRow);
+        List<GridItem> collisions = GetCollisionsAt(item, boundedTargetCol, boundedTargetRow);
 
         if (collisions.Count == 0)
         {
@@ -196,11 +293,12 @@ public partial class DraggableGrid
         }
 
         bool success = true;
-        var processedItems = new HashSet<Guid> { item.Id };
+        HashSet<Guid> processedItems = new HashSet<Guid> { item.Id };
 
-        foreach (var collidingItem in collisions)
+        foreach (GridItem collidingItem in collisions)
         {
-            if (!await ProcessCollision(collidingItem, item, deltaCol, deltaRow, processedItems, originalPositions))
+            bool resolved = await ProcessCollision(collidingItem, item, deltaCol, deltaRow, processedItems, originalPositions);
+            if (!resolved)
             {
                 success = false;
                 break;
@@ -210,7 +308,7 @@ public partial class DraggableGrid
         if (success)
         {
             bool hasNewCollisions = false;
-            foreach (var gridItem in Layout.Items)
+            foreach (GridItem gridItem in Layout.Items)
             {
                 if (HasCollision(gridItem, gridItem.Column, gridItem.Row))
                 {
@@ -229,7 +327,7 @@ public partial class DraggableGrid
 
         RevertToOriginalPositions(originalPositions);
 
-        await TrySwapPlacement(item, targetCol, targetRow, deltaCol, deltaRow);
+        await TrySwapPlacement(item, boundedTargetCol, boundedTargetRow, deltaCol, deltaRow);
     }
 
     private async Task<bool> ProcessCollision(GridItem collidingItem, GridItem pushingItem,
@@ -237,7 +335,9 @@ public partial class DraggableGrid
                                             Dictionary<Guid, (int Column, int Row)> originalPositions)
     {
         if (processedItems.Contains(collidingItem.Id))
+        {
             return true;
+        }
 
         processedItems.Add(collidingItem.Id);
 
@@ -287,14 +387,15 @@ public partial class DraggableGrid
         collidingItem.Column = newCol;
         collidingItem.Row = newRow;
 
-        var newCollisions = GetCollisionsAt(collidingItem, newCol, newRow)
+        List<GridItem> newCollisions = GetCollisionsAt(collidingItem, newCol, newRow)
             .Where(c => !processedItems.Contains(c.Id))
             .ToList();
 
-        foreach (var newCollision in newCollisions)
+        foreach (GridItem newCollision in newCollisions)
         {
-            if (!await ProcessCollision(newCollision, collidingItem,
-                                      deltaCol, deltaRow, processedItems, originalPositions))
+            bool ok = await ProcessCollision(newCollision, collidingItem,
+                                      deltaCol, deltaRow, processedItems, originalPositions);
+            if (!ok)
             {
                 collidingItem.Column = originalCol;
                 collidingItem.Row = originalRow;
@@ -304,7 +405,8 @@ public partial class DraggableGrid
 
         if (hitBoundary && HasCollision(collidingItem, newCol, newRow))
         {
-            if (!FindAlternativePosition(collidingItem, pushingItem, newCol, newRow, deltaCol, deltaRow))
+            bool foundAlternative = FindAlternativePosition(collidingItem, pushingItem, newCol, newRow, deltaCol, deltaRow);
+            if (!foundAlternative)
             {
                 collidingItem.Column = originalCol;
                 collidingItem.Row = originalRow;
@@ -315,10 +417,11 @@ public partial class DraggableGrid
                 .Where(c => !processedItems.Contains(c.Id))
                 .ToList();
 
-            foreach (var newCollision in newCollisions)
+            foreach (GridItem newCollision in newCollisions)
             {
-                if (!await ProcessCollision(newCollision, collidingItem,
-                                          deltaCol, deltaRow, processedItems, originalPositions))
+                bool ok = await ProcessCollision(newCollision, collidingItem,
+                                          deltaCol, deltaRow, processedItems, originalPositions);
+                if (!ok)
                 {
                     collidingItem.Column = originalCol;
                     collidingItem.Row = originalRow;
@@ -342,21 +445,25 @@ public partial class DraggableGrid
             for (int rowOffset = 1; rowOffset <= Layout.Rows; rowOffset++)
             {
                 int testRow = preferredRow + rowOffset;
-                if (testRow + item.RowSpan - 1 <= Layout.Rows &&
-                    !HasCollision(item, preferredCol, testRow, new List<Guid> { pushingItem.Id }))
+                if (testRow + item.RowSpan - 1 <= Layout.Rows)
                 {
-                    item.Column = preferredCol;
-                    item.Row = testRow;
-                    return true;
+                    if (!HasCollision(item, preferredCol, testRow, new List<Guid> { pushingItem.Id }))
+                    {
+                        item.Column = preferredCol;
+                        item.Row = testRow;
+                        return true;
+                    }
                 }
 
                 testRow = preferredRow - rowOffset;
-                if (testRow >= 1 &&
-                    !HasCollision(item, preferredCol, testRow, new List<Guid> { pushingItem.Id }))
+                if (testRow >= 1)
                 {
-                    item.Column = preferredCol;
-                    item.Row = testRow;
-                    return true;
+                    if (!HasCollision(item, preferredCol, testRow, new List<Guid> { pushingItem.Id }))
+                    {
+                        item.Column = preferredCol;
+                        item.Row = testRow;
+                        return true;
+                    }
                 }
             }
         }
@@ -365,21 +472,25 @@ public partial class DraggableGrid
             for (int colOffset = 1; colOffset <= Layout.Columns; colOffset++)
             {
                 int testCol = preferredCol + colOffset;
-                if (testCol + item.ColumnSpan - 1 <= Layout.Columns &&
-                    !HasCollision(item, testCol, preferredRow, new List<Guid> { pushingItem.Id }))
+                if (testCol + item.ColumnSpan - 1 <= Layout.Columns)
                 {
-                    item.Column = testCol;
-                    item.Row = preferredRow;
-                    return true;
+                    if (!HasCollision(item, testCol, preferredRow, new List<Guid> { pushingItem.Id }))
+                    {
+                        item.Column = testCol;
+                        item.Row = preferredRow;
+                        return true;
+                    }
                 }
 
                 testCol = preferredCol - colOffset;
-                if (testCol >= 1 &&
-                    !HasCollision(item, testCol, preferredRow, new List<Guid> { pushingItem.Id }))
+                if (testCol >= 1)
                 {
-                    item.Column = testCol;
-                    item.Row = preferredRow;
-                    return true;
+                    if (!HasCollision(item, testCol, preferredRow, new List<Guid> { pushingItem.Id }))
+                    {
+                        item.Column = testCol;
+                        item.Row = preferredRow;
+                        return true;
+                    }
                 }
             }
         }
@@ -404,7 +515,7 @@ public partial class DraggableGrid
 
     private async Task TrySwapPlacement(GridItem item, int targetCol, int targetRow, int deltaCol, int deltaRow)
     {
-        var itemAtTarget = FindItemAtPosition(targetCol, targetRow);
+        GridItem? itemAtTarget = FindItemAtPosition(targetCol, targetRow);
 
         if (itemAtTarget != null && itemAtTarget.Id != item.Id)
         {
@@ -418,7 +529,7 @@ public partial class DraggableGrid
             item.Row = targetRow;
 
             bool hasCollisions = false;
-            foreach (var gridItem in Layout.Items)
+            foreach (GridItem gridItem in Layout.Items)
             {
                 if (HasCollision(gridItem, gridItem.Column, gridItem.Row))
                 {
@@ -454,15 +565,15 @@ public partial class DraggableGrid
 
     private async Task FindClosestFreePosition(GridItem item, int targetCol, int targetRow)
     {
-        var visited = new HashSet<(int, int)>();
-        var queue = new Queue<(int col, int row, int distance)>();
+        HashSet<(int, int)> visited = new HashSet<(int, int)>();
+        Queue<(int col, int row, int distance)> queue = new Queue<(int col, int row, int distance)>();
 
         queue.Enqueue((targetCol, targetRow, 0));
         visited.Add((targetCol, targetRow));
 
         while (queue.Count > 0)
         {
-            var (col, row, distance) = queue.Dequeue();
+            (int col, int row, int distance) = queue.Dequeue();
 
             if (!HasCollision(item, col, row))
             {
@@ -473,13 +584,13 @@ public partial class DraggableGrid
                 return;
             }
 
-            var neighbors = new[]
+            (int, int)[] neighbors = new (int, int)[]
             {
                 (col + 1, row), (col - 1, row),
                 (col, row + 1), (col, row - 1)
             };
 
-            foreach (var (nCol, nRow) in neighbors)
+            foreach ((int nCol, int nRow) in neighbors)
             {
                 if (nCol >= 1 && nCol <= Layout.Columns - item.ColumnSpan + 1 &&
                     nRow >= 1 && nRow <= Layout.Rows - item.RowSpan + 1 &&
@@ -494,7 +605,7 @@ public partial class DraggableGrid
 
     private void RevertToOriginalPositions(Dictionary<Guid, (int Column, int Row)> originalPositions)
     {
-        foreach (var item in Layout.Items)
+        foreach (GridItem item in Layout.Items)
         {
             if (originalPositions.TryGetValue(item.Id, out var originalPos))
             {
@@ -507,7 +618,9 @@ public partial class DraggableGrid
     private async Task MoveSelectedItem(int deltaCol, int deltaRow)
     {
         if (SelectedItem == null)
+        {
             return;
+        }
 
         int newCol = SelectedItem.Column + deltaCol;
         int newRow = SelectedItem.Row + deltaRow;
@@ -518,27 +631,30 @@ public partial class DraggableGrid
     private async Task SelectItem(GridItem item)
     {
         if (SelectedItem?.Id == item.Id)
+        {
             return;
+        }
 
         SelectedItem = item;
-        StateHasChanged();
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task CellClicked(int col, int row)
     {
         if (IsDragging)
+        {
             return;
+        }
 
-        var itemAtCell = FindItemAtCell(col, row);
+        GridItem? itemAtCell = FindItemAtCell(col, row);
 
         if (itemAtCell != null)
         {
-            if (SelectedItem?.Id != itemAtCell.Id)
-            {
-                await SelectItem(itemAtCell);
-            }
+            await SelectItem(itemAtCell);
+            return;
         }
-        else if (SelectedItem != null)
+
+        if (SelectedItem != null)
         {
             await SimplePlaceItem(SelectedItem, col, row);
         }
@@ -576,7 +692,9 @@ public partial class DraggableGrid
             case "Delete":
             case "Backspace":
                 if (SelectedItem != null)
+                {
                     RemoveItem(SelectedItem);
+                }
                 break;
             case "Escape":
                 DeselectItem();
@@ -600,11 +718,19 @@ public partial class DraggableGrid
         int newColSpan = item.ColumnSpan + delta;
 
         if (newColSpan < 1)
+        {
             newColSpan = 1;
+        }
+
         if (newColSpan > Layout.Columns)
+        {
             newColSpan = Layout.Columns;
+        }
+
         if (item.Column + newColSpan - 1 > Layout.Columns)
+        {
             return;
+        }
 
         int originalColSpan = item.ColumnSpan;
         item.ColumnSpan = newColSpan;
@@ -624,11 +750,19 @@ public partial class DraggableGrid
         int newRowSpan = item.RowSpan + delta;
 
         if (newRowSpan < 1)
+        {
             newRowSpan = 1;
+        }
+
         if (newRowSpan > Layout.Rows)
+        {
             newRowSpan = Layout.Rows;
+        }
+
         if (item.Row + newRowSpan - 1 > Layout.Rows)
+        {
             return;
+        }
 
         int originalRowSpan = item.RowSpan;
         item.RowSpan = newRowSpan;
@@ -645,11 +779,11 @@ public partial class DraggableGrid
 
     private void AddNewItem()
     {
-        var colors = new[] { "#FFCCCC", "#CCFFCC", "#CCCCFF", "#FFFFCC", "#FFCCFF", "#CCFFFF" };
+        string[] colors = new string[] { "#FFCCCC", "#CCFFCC", "#CCCCFF", "#FFFFCC", "#FFCCFF", "#CCFFFF" };
 
-        var newItem = new GridItem
+        GridItem newItem = new GridItem
         {
-            Content = $"Elemento {Layout.Items.Count + 1}",
+            Content = "Elemento " + (Layout.Items.Count + 1),
             Column = 1,
             Row = 1,
             ColumnSpan = 2,
@@ -707,6 +841,7 @@ public partial class DraggableGrid
         {
             SelectedItem = Layout.Items.FirstOrDefault();
         }
+
         LayoutChanged.InvokeAsync(Layout);
         StateHasChanged();
     }
@@ -721,7 +856,7 @@ public partial class DraggableGrid
 
     private void SaveLayout()
     {
-        var json = JsonSerializer.Serialize(Layout, new JsonSerializerOptions { WriteIndented = true });
+        string json = JsonSerializer.Serialize(Layout, new JsonSerializerOptions { WriteIndented = true });
         Console.WriteLine("Layout guardado:");
         Console.WriteLine(json);
     }
