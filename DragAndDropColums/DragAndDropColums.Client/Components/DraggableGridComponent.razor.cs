@@ -1,20 +1,20 @@
 namespace DragAndDropColums.Client.Components;
 
-public partial class DraggableGridComponent
+public partial class DraggableGridComponent<TData>
 {
-    [Parameter] public GridLayout Layout { get; set; } = new();
-    [Parameter] public EventCallback<GridLayout> LayoutChanged { get; set; }
+    [Parameter] public GridLayout<TData> Layout { get; set; } = new();
+    [Parameter] public EventCallback<GridLayout<TData>> LayoutChanged { get; set; }
 
-    private GridItem? _selectedItem;
-    private GridVisualization? _gridVisualization;
+    private GridItem<TData>? _selectedItem;
+    private GridVisualization<TData>? _gridVisualization;
 
-    private async Task OnSelectedItemChanged(GridItem? item)
+    private async Task OnSelectedItemChanged(GridItem<TData>? item)
     {
         _selectedItem = item;
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task OnLayoutChanged(GridLayout layout)
+    private async Task OnLayoutChanged(GridLayout<TData> layout)
     {
         Layout = layout;
         await LayoutChanged.InvokeAsync(Layout);
@@ -23,7 +23,7 @@ public partial class DraggableGridComponent
 
     private async Task AddNewItem()
     {
-        var newItem = GridItemFactory.CreateNewItem(Layout.Items.Count + 1);
+        var newItem = GridItemFactory<TData>.CreateNewItem(Layout.Items.Count + 1);
         Layout.Items.Add(newItem);
         _selectedItem = newItem;
         await LayoutChanged.InvokeAsync(Layout);
@@ -38,7 +38,7 @@ public partial class DraggableGridComponent
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task RemoveItem(GridItem item)
+    private async Task RemoveItem(GridItem<TData> item)
     {
         Layout.Items.Remove(item);
         if (_selectedItem?.Id == item.Id)
@@ -58,7 +58,7 @@ public partial class DraggableGridComponent
         }
     }
 
-    private async Task ResizeItemWidth(GridItem item, int delta)
+    private async Task ResizeItemWidth(GridItem<TData> item, int delta)
     {
         if (_gridVisualization != null)
         {
@@ -66,7 +66,7 @@ public partial class DraggableGridComponent
         }
     }
 
-    private async Task ResizeItemHeight(GridItem item, int delta)
+    private async Task ResizeItemHeight(GridItem<TData> item, int delta)
     {
         if (_gridVisualization != null)
         {

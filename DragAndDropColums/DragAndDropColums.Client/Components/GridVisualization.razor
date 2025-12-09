@@ -1,4 +1,5 @@
-﻿<div class="draggable-grid-container @_dragState.DragCursorClass"
+﻿@typeparam TData
+<div class="draggable-grid-container @_dragState.DragCursorClass"
      @onkeydown="HandleKeyDown"
      @onmouseup="HandleMouseUp"
      @onmouseleave="CleanUpDrag"
@@ -71,13 +72,13 @@
                 </div>
 
                 <div class="item-content">
-                    @if (string.IsNullOrEmpty(item.Content))
+                    @if (ChildContent == null)
                     {
                         <em>Click para seleccionar</em>
                     }
                     else
                     {
-                        @item.Content
+                        @ChildContent(item.Data)
                     }
                 </div>
 

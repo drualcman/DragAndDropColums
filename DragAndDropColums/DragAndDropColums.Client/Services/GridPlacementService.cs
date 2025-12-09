@@ -1,17 +1,17 @@
 ﻿namespace DragAndDropColums.Client.Services;
 
-public class GridPlacementService
+public class GridPlacementService<TData>
 {
-    private readonly GridLayout _layout;
-    private readonly GridCollisionService _collisionService;
+    private readonly GridLayout<TData> _layout;
+    private readonly GridCollisionService<TData> _collisionService;
 
-    public GridPlacementService(GridLayout layout, GridCollisionService collisionService)
+    public GridPlacementService(GridLayout<TData> layout, GridCollisionService<TData> collisionService)
     {
         _layout = layout;
         _collisionService = collisionService;
     }
 
-    public async Task<PlacementResult> PlaceItemAsync(GridItem item, int targetCol, int targetRow)
+    public async Task<PlacementResult> PlaceItemAsync(GridItem<TData> item, int targetCol, int targetRow)
     {
         int boundedTargetCol = Math.Max(1, Math.Min(targetCol, _layout.Columns - item.ColumnSpan + 1));
         int boundedTargetRow = Math.Max(1, Math.Min(targetRow, _layout.Rows - item.RowSpan + 1));
@@ -73,7 +73,7 @@ public class GridPlacementService
         // CASO 4: Si hay EXACTAMENTE UNA colisión para intercambio
         if (collisions.Count == 1)
         {
-            GridItem targetItem = collisions[0];
+            GridItem<TData> targetItem = collisions[0];
 
             bool canSwapDirectly = item.ColumnSpan == targetItem.ColumnSpan &&
                                    item.RowSpan == targetItem.RowSpan;
@@ -92,7 +92,7 @@ public class GridPlacementService
         return await TryAlternativePlacementAsync(item, boundedTargetCol, boundedTargetRow);
     }
     private async Task<PlacementResult> TryIntelligentRedistributionAsync(
-        GridItem item,
+        GridItem<TData> item,
         int targetCol,
         int targetRow,
         Dictionary<Guid, (int Column, int Row)> originalPositions)
@@ -122,13 +122,13 @@ public class GridPlacementService
             redistributionPlan, originalPositions);
     }
 
-    private (List<GridItem> collisions, HashSet<(int, int)> occupiedCells,
-            Dictionary<GridItem, List<(int, int)>> possibleMoves)
-        AnalyzeAffectedArea(GridItem item, int targetCol, int targetRow)
+    private (List<GridItem<TData>> collisions, HashSet<(int, int)> occupiedCells,
+            Dictionary<GridItem<TData>, List<(int, int)>> possibleMoves)
+        AnalyzeAffectedArea(GridItem<TData> item, int targetCol, int targetRow)
     {
         var collisions = _collisionService.GetCollisionsAt(item, targetCol, targetRow);
         var occupiedCells = new HashSet<(int, int)>();
-        var possibleMoves = new Dictionary<GridItem, List<(int, int)>>();
+        var possibleMoves = new Dictionary<GridItem<TData>, List<(int, int)>>();
 
         // Calcular todas las celdas ocupadas en el área afectada
         foreach (var collidingItem in collisions)
@@ -144,7 +144,7 @@ public class GridPlacementService
     }
 
 
-    private List<(int col, int row)> FindPossibleMovesForItem(GridItem item)
+    private List<(int col, int row)> FindPossibleMovesForItem(GridItem<TData> item)
     {
         var possibleMoves = new List<(int col, int row)>();
 
@@ -174,15 +174,15 @@ public class GridPlacementService
         return possibleMoves;
     }
 
-    private async Task<Dictionary<GridItem, (int col, int row)>?>
+    private async Task<Dictionary<GridItem<TData>, (int col, int row)>?>
         CreateRedistributionPlanAsync(
-            GridItem movingItem,
+            GridItem<TData> movingItem,
             int targetCol,
             int targetRow,
-            (List<GridItem> collisions, HashSet<(int, int)> occupiedCells,
-             Dictionary<GridItem, List<(int, int)>> possibleMoves) analysis)
+            (List<GridItem<TData>> collisions, HashSet<(int, int)> occupiedCells,
+             Dictionary<GridItem<TData>, List<(int, int)>> possibleMoves) analysis)
     {
-        var plan = new Dictionary<GridItem, (int col, int row)>();
+        var plan = new Dictionary<GridItem<TData>, (int col, int row)>();
         var processedItems = new HashSet<Guid> { movingItem.Id };
 
         // Primero, calcular la dirección general del movimiento
@@ -215,8 +215,8 @@ public class GridPlacementService
     }
 
     private async Task<(int col, int row)?> FindBestMoveDirectionAsync(
-        GridItem item,
-        GridItem movingItem,
+        GridItem<TData> item,
+        GridItem<TData> movingItem,
         int centerCol,
         int centerRow,
         List<(int col, int row)> possibleMoves)
@@ -262,7 +262,7 @@ public class GridPlacementService
 
     private int CalculateMoveScore(
         (int col, int row) move,
-        GridItem item,
+        GridItem<TData> item,
         int dirCol, int dirRow,
         int centerCol, int centerRow)
     {
@@ -305,10 +305,10 @@ public class GridPlacementService
     }
 
     private async Task<PlacementResult> ExecuteRedistributionPlanAsync(
-        GridItem movingItem,
+        GridItem<TData> movingItem,
         int targetCol,
         int targetRow,
-        Dictionary<GridItem, (int col, int row)> plan,
+        Dictionary<GridItem<TData>, (int col, int row)> plan,
         Dictionary<Guid, (int Column, int Row)> originalPositions)
     {
         // Aplicar movimientos en orden (primero los más lejanos del centro)
@@ -349,7 +349,7 @@ public class GridPlacementService
     }
 
     private async Task<PlacementResult> TryPushInDirectionAsync(
-        GridItem item,
+        GridItem<TData> item,
         int targetCol,
         int targetRow,
         int deltaCol,
@@ -370,7 +370,7 @@ public class GridPlacementService
         // Obtener colisiones iniciales
         var collisions = _collisionService.GetCollisionsAt(item, targetCol, targetRow);
 
-        foreach (GridItem collidingItem in collisions)
+        foreach (GridItem<TData> collidingItem in collisions)
         {
             bool resolved = await ProcessCollisionAsync(
                 collidingItem,
@@ -408,8 +408,8 @@ public class GridPlacementService
 
 
     private async Task<PlacementResult> TrySwapItemsAsync(
-        GridItem movingItem,
-        GridItem targetItem,
+        GridItem<TData> movingItem,
+        GridItem<TData> targetItem,
         Dictionary<Guid, (int Column, int Row)> originalPositions)
     {
         // Guardar posiciones temporales
@@ -444,8 +444,8 @@ public class GridPlacementService
     }
 
     private async Task<PlacementResult> TryComplexSwapAsync(
-        GridItem movingItem,
-        GridItem targetItem,
+        GridItem<TData> movingItem,
+        GridItem<TData> targetItem,
         Dictionary<Guid, (int Column, int Row)> originalPositions)
     {
         // Guardar posición original del elemento objetivo
@@ -521,8 +521,8 @@ public class GridPlacementService
     }
 
     private async Task<bool> ProcessCollisionAsync(
-            GridItem collidingItem,
-            GridItem pushingItem,
+            GridItem<TData> collidingItem,
+            GridItem<TData> pushingItem,
             int deltaCol,
             int deltaRow,
             HashSet<Guid> processedItems,
@@ -632,7 +632,7 @@ public class GridPlacementService
             .ToList();
 
         // Procesar colisiones recursivamente
-        foreach (GridItem newCollision in newCollisions)
+        foreach (GridItem<TData> newCollision in newCollisions)
         {
             bool resolved = await ProcessCollisionAsync(
                 newCollision,
@@ -656,8 +656,8 @@ public class GridPlacementService
     }
 
     private async Task<(bool success, int col, int row)> FindAlternativePositionForBlockedItem(
-        GridItem blockedItem,
-        GridItem pushingItem,
+        GridItem<TData> blockedItem,
+        GridItem<TData> pushingItem,
         int deltaCol,
         int deltaRow)
     {
@@ -693,7 +693,7 @@ public class GridPlacementService
     }
 
     private async Task<(bool success, int col, int row)> FindClosestFreePositionForItemAsync(
-        GridItem item,
+        GridItem<TData> item,
         int startCol,
         int startRow)
     {
@@ -748,7 +748,7 @@ public class GridPlacementService
 
     private void RevertToOriginalPositions(Dictionary<Guid, (int Column, int Row)> originalPositions)
     {
-        foreach (GridItem item in _layout.Items)
+        foreach (GridItem<TData> item in _layout.Items)
         {
             if (originalPositions.TryGetValue(item.Id, out var originalPos))
             {
@@ -758,7 +758,7 @@ public class GridPlacementService
         }
     }
 
-    private async Task<PlacementResult> TryAlternativePlacementAsync(GridItem item, int targetCol, int targetRow)
+    private async Task<PlacementResult> TryAlternativePlacementAsync(GridItem<TData> item, int targetCol, int targetRow)
     {
         // Intentar encontrar la posición libre más cercana
         var result = await FindClosestFreePositionForItemAsync(item, targetCol, targetRow);
@@ -773,9 +773,9 @@ public class GridPlacementService
         return PlacementResult.Failed;
     }
 
-    public HashSet<(int, int)> GetItemCells(DragState dragState)
+    public HashSet<(int, int)> GetItemCells(DragState<TData> dragState)
     {
-        GridItem item = dragState.DraggingItem;
+        GridItem<TData> item = dragState.DraggingItem;
         int? targetCol = dragState.FinalDropTarget?.Col;
         int? targetRow = dragState.FinalDropTarget?.Row;
 
@@ -794,7 +794,7 @@ public class GridPlacementService
         return cells;
     }
 
-    public async Task<PlacementResult> FindClosestFreePositionAsync(GridItem item, int targetCol, int targetRow)
+    public async Task<PlacementResult> FindClosestFreePositionAsync(GridItem<TData> item, int targetCol, int targetRow)
     {
         var result = await FindClosestFreePositionForItemAsync(item, targetCol, targetRow);
 
@@ -808,7 +808,7 @@ public class GridPlacementService
         return PlacementResult.Failed;
     }
 
-    public bool TryPlaceNewItem(GridItem newItem)
+    public bool TryPlaceNewItem(GridItem<TData> newItem)
     {
         bool placed = false;
         for (int row = 1; row <= _layout.Rows && !placed; row++)

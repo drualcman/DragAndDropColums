@@ -1,4 +1,5 @@
-﻿<div class="grid-controls">
+﻿@typeparam TData
+<div class="grid-controls">
     <button @onclick="AddNewItem" class="btn btn-primary">➕ Agregar Elemento</button>
     <button @onclick="ResetGrid" class="btn btn-secondary">🔄 Reiniciar</button>
     <div class="grid-info">
@@ -18,7 +19,7 @@
         <div class="selected-item-info">
             <strong>Seleccionado:</strong>
             <span class="selected-item-label" style="background-color: @_selectedItem.BackgroundColor;">
-                @_selectedItem.Content
+                @_selectedItem.Data.ToString()
             </span>
             <span class="selected-item-details">
                 (@_selectedItem.Column,@_selectedItem.Row) - Tamaño: @_selectedItem.ColumnSpan×@_selectedItem.RowSpan
@@ -60,7 +61,7 @@
 </div>
 
 <!-- Grid Visualization Component -->
-<GridVisualization @ref="_gridVisualization"
+<GridVisualization @ref="_gridVisualization" TData=TData
                    Layout="Layout"
                    SelectedItem="_selectedItem"
                    SelectedItemChanged="OnSelectedItemChanged"
@@ -72,12 +73,6 @@
 {
     <div class="item-editor">
         <h4>✏️ Editar Elemento</h4>
-
-        <div class="editor-section">
-            <label>📝 Contenido:</label>
-            <textarea @bind="_selectedItem.Content" class="form-control" rows="3"></textarea>
-        </div>
-
         <div class="editor-grid">
             <div class="editor-section">
                 <label>Ancho (columnas):</label>

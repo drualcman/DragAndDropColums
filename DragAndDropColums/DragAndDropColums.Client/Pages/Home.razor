@@ -4,48 +4,50 @@
 
 <div class="demo-container">
 
-    <GridVisualization @bind-Layout="gridLayout" />
+    <GridVisualization @bind-Layout="gridLayout">
+        <p>@context</p>
+    </GridVisualization>
 
 </div>
 
 @code {
-    private GridLayout gridLayout = new()
+    private GridLayout<string> gridLayout = new()
     {
         Columns = 8,
         Rows = 10,
-        Items = new List<GridItem>
+        Items = new List<GridItem<string>>
         {
-            new() { 
-                Column = 1, 
-                Row = 1, 
-                ColumnSpan = 2, 
-                RowSpan = 2, 
-                Content = "Título Principal", 
-                BackgroundColor = "#FFCCCC" 
-            },
-            new() { 
-                Column = 4, 
+            new() {
+                Column = 1,
                 Row = 1,
                 ColumnSpan = 2,
                 RowSpan = 2,
-                Content = "Subtítulo o descripción breve", 
-                BackgroundColor = "#CCFFCC" 
+                Data = "Título Principal",
+                BackgroundColor = "#FFCCCC"
             },
-            new() { 
-                Column = 1, 
+            new() {
+                Column = 4,
+                Row = 1,
+                ColumnSpan = 2,
+                RowSpan = 2,
+                Data = "Subtítulo o descripción breve",
+                BackgroundColor = "#CCFFCC"
+            },
+            new() {
+                Column = 1,
                 Row = 4,
                 ColumnSpan = 2,
                 RowSpan = 2,
-                Content = "Contenido principal que puede ser más largo y ocupar múltiples celdas. Ideal para mostrar información detallada.", 
-                BackgroundColor = "#CCCCFF" 
+                Data = "Contenido principal que puede ser más largo y ocupar múltiples celdas. Ideal para mostrar información detallada.",
+                BackgroundColor = "#CCCCFF"
             },
-            new() { 
-                Column = 6, 
+            new() {
+                Column = 6,
                 Row = 3,
                 ColumnSpan = 2,
                 RowSpan = 2,
-                Content = "Panel lateral o sidebar con información adicional", 
-                BackgroundColor = "#FFFFCC" 
+                Data = "Panel lateral o sidebar con información adicional",
+                BackgroundColor = "#FFFFCC"
             },
         }
     };

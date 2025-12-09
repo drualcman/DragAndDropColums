@@ -1,10 +1,10 @@
 ﻿namespace DragAndDropColums.Client.Services;
 
-public class GridStyleService
+public class GridStyleService<TData>
 {
-    private readonly GridLayout _layout;
+    private readonly GridLayout<TData> _layout;
 
-    public GridStyleService(GridLayout layout)
+    public GridStyleService(GridLayout<TData> layout)
     {
         _layout = layout;
     }
@@ -19,7 +19,7 @@ public class GridStyleService
                $"min-height: {_layout.Rows * (_layout.CellSize + _layout.Gap)}px;";
     }
 
-    public string GetItemStyle(GridItem item, bool isSelected, bool isDragging)
+    public string GetItemStyle(GridItem<TData> item, bool isSelected, bool isDragging)
     {
         string borderColor = isSelected ? "#007bff" :
                              isDragging ? "#ff6b6b" : "#333";
@@ -36,7 +36,7 @@ public class GridStyleService
                $"{(isDragging ? "opacity: 0.8; cursor: grabbing;" : "cursor: grab;")}";
     }
 
-    public bool IsDropAreaCorner(int col, int row, GridItem item, (int Col, int Row) target)
+    public bool IsDropAreaCorner(int col, int row, GridItem<TData> item, (int Col, int Row) target)
     {
         return (col == target.Col && row == target.Row) || // Esquina superior izquierda
                (col == target.Col + item.ColumnSpan - 1 && row == target.Row) || // Esquina superior derecha

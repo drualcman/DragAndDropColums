@@ -1,16 +1,16 @@
 ﻿namespace DragAndDropColums.Client.Services;
 
-public class DragService
+public class DragService<TData>
 {
-    private readonly GridLayout _layout;
+    private readonly GridLayout<TData> _layout;
 
-    public DragService(GridLayout layout)
+    public DragService(GridLayout<TData> layout)
     {
         _layout = layout;
     }
 
     public (int Col, int Row)? CalculateDragTarget(MouseEventArgs e,
-        DragState dragState, GridItem draggingItem)
+        DragState<TData> dragState, GridItem<TData> draggingItem)
     {
         if (!dragState.DragStartMouse.HasValue || !dragState.DragStartCell.HasValue)
             return null;

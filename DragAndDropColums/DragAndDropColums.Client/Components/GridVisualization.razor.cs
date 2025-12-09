@@ -1,19 +1,20 @@
 namespace DragAndDropColums.Client.Components;
 
-public partial class GridVisualization : IDisposable
+public partial class GridVisualization<TData> : IDisposable
 {
-    [Parameter] public GridLayout Layout { get; set; } = new();
-    [Parameter] public GridItem? SelectedItem { get; set; }
-    [Parameter] public EventCallback<GridItem?> SelectedItemChanged { get; set; }
-    [Parameter] public EventCallback<GridLayout> LayoutChanged { get; set; }
-    [Parameter] public EventCallback<GridItem> OnItemRemoved { get; set; }
+    [Parameter] public GridLayout<TData> Layout { get; set; } = new();
+    [Parameter] public RenderFragment<TData>? ChildContent { get; set; }
+    [Parameter] public GridItem<TData>? SelectedItem { get; set; }
+    [Parameter] public EventCallback<GridItem<TData>?> SelectedItemChanged { get; set; }
+    [Parameter] public EventCallback<GridLayout<TData>> LayoutChanged { get; set; }
+    [Parameter] public EventCallback<GridItem<TData>> OnItemRemoved { get; set; }
     [Parameter] public bool AllowKeyboardControls { get; set; } = true;
 
-    private DragState _dragState = new();
-    private GridCollisionService _collisionService;
-    private GridPlacementService _placementService;
-    private GridStyleService _styleService;
-    private DragService _dragService;
+    private DragState<TData> _dragState = new();
+    private GridCollisionService<TData> _collisionService;
+    private GridPlacementService<TData> _placementService;
+    private GridStyleService<TData> _styleService;
+    private DragService<TData> _dragService;
     private HashSet<(int, int)> _occupiedCells = new();
 
     protected override void OnParametersSet()
@@ -24,22 +25,22 @@ public partial class GridVisualization : IDisposable
 
     private void InitializeServices()
     {
-        _collisionService = new GridCollisionService(Layout);
-        _placementService = new GridPlacementService(Layout, _collisionService);
-        _styleService = new GridStyleService(Layout);
-        _dragService = new DragService(Layout);
+        _collisionService = new GridCollisionService<TData>(Layout);
+        _placementService = new GridPlacementService<TData>(Layout, _collisionService);
+        _styleService = new GridStyleService<TData>(Layout);
+        _dragService = new DragService<TData>(Layout);
     }
 
     private string GetGridStyle() => _styleService.GetGridStyle();
 
-    private string GetItemStyle(GridItem item)
+    private string GetItemStyle(GridItem<TData> item)
     {
         bool isSelected = SelectedItem?.Id == item.Id;
         bool isDragging = _dragState.DraggingItem?.Id == item.Id;
         return _styleService.GetItemStyle(item, isSelected, isDragging);
     }
 
-    private async Task StartMouseDrag(MouseEventArgs e, GridItem item)
+    private async Task StartMouseDrag(MouseEventArgs e, GridItem<TData> item)
     {
         _dragState.DraggingItem = item;
         await SelectItem(item);
@@ -86,7 +87,7 @@ public partial class GridVisualization : IDisposable
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task SelectItem(GridItem item)
+    private async Task SelectItem(GridItem<TData> item)
     {
         if (SelectedItem?.Id == item.Id)
             return;
@@ -99,7 +100,7 @@ public partial class GridVisualization : IDisposable
         if (_dragState.IsDragging)
             return;
 
-        GridItem? itemAtCell = _collisionService.FindItemAtPosition(col, row);
+        GridItem<TData>? itemAtCell = _collisionService.FindItemAtPosition(col, row);
 
         if (itemAtCell != null)
         {
@@ -200,7 +201,7 @@ public partial class GridVisualization : IDisposable
         await MoveSelectedItemByDelta(deltaCol, deltaRow);
     }
 
-    public async Task ResizeItemWidth(GridItem item, int delta)
+    public async Task ResizeItemWidth(GridItem<TData> item, int delta)
     {
         int newColSpan = item.ColumnSpan + delta;
 
@@ -232,7 +233,7 @@ public partial class GridVisualization : IDisposable
         await InvokeAsync(StateHasChanged);
     }
 
-    public async Task ResizeItemHeight(GridItem item, int delta)
+    public async Task ResizeItemHeight(GridItem<TData> item, int delta)
     {
         int newRowSpan = item.RowSpan + delta;
 

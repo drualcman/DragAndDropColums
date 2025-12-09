@@ -1,15 +1,15 @@
 ﻿namespace DragAndDropColums.Client.Services;
 
-public class GridCollisionService
+public class GridCollisionService<TData>
 {
-    private readonly GridLayout _layout;
+    private readonly GridLayout<TData> _layout;
 
-    public GridCollisionService(GridLayout layout)
+    public GridCollisionService(GridLayout<TData> layout)
     {
         _layout = layout;
     }
 
-    public bool ItemsCollide(GridItem item1, int col1, int row1, GridItem item2)
+    public bool ItemsCollide(GridItem<TData> item1, int col1, int row1, GridItem<TData> item2)
     {
         bool colOverlap = col1 < item2.Column + item2.ColumnSpan &&
                          col1 + item1.ColumnSpan > item2.Column;
@@ -19,7 +19,7 @@ public class GridCollisionService
         return colOverlap && rowOverlap;
     }
 
-    public bool HasCollision(GridItem item, int col, int row, List<Guid>? ignoreIds = null)
+    public bool HasCollision(GridItem<TData> item, int col, int row, List<Guid>? ignoreIds = null)
     {
         if (col < 1)
             return true;
@@ -30,7 +30,7 @@ public class GridCollisionService
         if (row + item.RowSpan - 1 > _layout.Rows)
             return true;
 
-        foreach (GridItem other in _layout.Items)
+        foreach (GridItem<TData> other in _layout.Items)
         {
             if (other.Id == item.Id)
                 continue;
@@ -46,11 +46,11 @@ public class GridCollisionService
         return false;
     }
 
-    public List<GridItem> GetCollisionsAt(GridItem item, int col, int row)
+    public List<GridItem<TData>> GetCollisionsAt(GridItem<TData> item, int col, int row)
     {
-        List<GridItem> collisions = new();
+        List<GridItem<TData>> collisions = new();
 
-        foreach (GridItem other in _layout.Items)
+        foreach (GridItem<TData> other in _layout.Items)
         {
             if (other.Id == item.Id)
                 continue;
@@ -64,14 +64,14 @@ public class GridCollisionService
         return collisions;
     }
 
-    public GridItem? FindItemAtPosition(int col, int row)
+    public GridItem<TData>? FindItemAtPosition(int col, int row)
     {
         return _layout.Items.FirstOrDefault(item =>
             col >= item.Column && col < item.Column + item.ColumnSpan &&
             row >= item.Row && row < item.Row + item.RowSpan);
     }
 
-    public HashSet<(int, int)> GetItemCells(GridItem item, int? targetCol = null, int? targetRow = null)
+    public HashSet<(int, int)> GetItemCells(GridItem<TData> item, int? targetCol = null, int? targetRow = null)
     {
         var cells = new HashSet<(int, int)>();
         int startCol = targetCol ?? item.Column;

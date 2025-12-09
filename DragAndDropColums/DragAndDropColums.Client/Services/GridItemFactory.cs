@@ -1,6 +1,6 @@
 ﻿namespace DragAndDropColums.Client.Services;
 
-public static class GridItemFactory
+public static class GridItemFactory<TData>
 {
     private static readonly string[] Colors =
     {
@@ -8,24 +8,14 @@ public static class GridItemFactory
         "#9b59b6", "#1abc9c", "#d35400", "#34495e"
     };
 
-    private static readonly string[] SampleContents =
-    {
-        "Tarea importante",
-        "Nota rápida",
-        "Recordatorio",
-        "Ideas para proyecto",
-        "Lista de compras",
-        "Reunión con equipo"
-    };
-
-    public static GridItem CreateNewItem(int index)
+    public static GridItem<TData> CreateNewItem(int index)
     {
         var random = new Random();
 
-        return new GridItem
+        return new GridItem<TData>
         {
             Id = Guid.NewGuid(),
-            Content = SampleContents[random.Next(SampleContents.Length)],
+            Data = default!,
             Column = 1,
             Row = index,
             ColumnSpan = 2,
