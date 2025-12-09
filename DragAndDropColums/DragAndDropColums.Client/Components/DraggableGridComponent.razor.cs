@@ -94,6 +94,14 @@ public partial class DraggableGridComponent : IDisposable
         int newCol = _selectedItem.Column + deltaCol;
         int newRow = _selectedItem.Row + deltaRow;
 
+        await MoveItem(newCol, newRow);
+    }
+
+    private async Task MoveItem(int newCol, int newRow)
+    {
+        if (_selectedItem == null)
+            return;
+
         await _placementService.PlaceItemAsync(_selectedItem, newCol, newRow);
         await LayoutChanged.InvokeAsync(Layout);
         await InvokeAsync(StateHasChanged);
@@ -119,12 +127,7 @@ public partial class DraggableGridComponent : IDisposable
             await SelectItem(itemAtCell);
             return;
         }
-
-        if (_selectedItem != null)
-        {
-            await _placementService.PlaceItemAsync(_selectedItem, col, row);
-            await LayoutChanged.InvokeAsync(Layout);
-        }
+        await MoveItem(col, row);
     }
 
     private async Task DeselectItem()
