@@ -23,9 +23,35 @@ public class GridPlacementService
 
         var originalPositions = _layout.Items.ToDictionary(i => i.Id, i => (i.Column, i.Row));
 
+        // Guardar posición original del item que se mueve
+        int originalItemCol = item.Column;
+        int originalItemRow = item.Row;
+
+        // Calcular dirección del movimiento
+        int deltaCol = Math.Sign(boundedTargetCol - originalItemCol);
+        int deltaRow = Math.Sign(boundedTargetRow - originalItemRow);
+
+        // Si el movimiento es diagonal, priorizamos la dirección más fuerte
+        if (deltaCol != 0 && deltaRow != 0)
+        {
+            int colDistance = Math.Abs(boundedTargetCol - originalItemCol);
+            int rowDistance = Math.Abs(boundedTargetRow - originalItemRow);
+
+            if (colDistance >= rowDistance)
+            {
+                deltaRow = 0; // Priorizar movimiento horizontal
+            }
+            else
+            {
+                deltaCol = 0; // Priorizar movimiento vertical
+            }
+        }
+
+        // Mover el item principal a su nueva posición
         item.Column = boundedTargetCol;
         item.Row = boundedTargetRow;
 
+        // Obtener colisiones iniciales
         var collisions = _collisionService.GetCollisionsAt(item, boundedTargetCol, boundedTargetRow);
 
         if (collisions.Count == 0)
@@ -33,16 +59,20 @@ public class GridPlacementService
             return PlacementResult.Success;
         }
 
-        int deltaCol = boundedTargetCol - originalPositions[item.Id].Column;
-        int deltaRow = boundedTargetRow - originalPositions[item.Id].Row;
-
         var processedItems = new HashSet<Guid> { item.Id };
         bool success = true;
 
         foreach (GridItem collidingItem in collisions)
         {
-            bool resolved = await ProcessCollisionAsync(collidingItem, item, deltaCol, deltaRow,
-                processedItems, originalPositions);
+            bool resolved = await ProcessCollisionAsync(
+                collidingItem,
+                item,
+                deltaCol,
+                deltaRow,
+                processedItems,
+                originalPositions,
+                0); // Nivel inicial de recursión
+
             if (!resolved)
             {
                 success = false;
@@ -50,22 +80,242 @@ public class GridPlacementService
             }
         }
 
-        if (success && !HasAnyCollision())
+        if (success)
+        {
+            // Verificar que no haya colisiones después del procesamiento
+            bool finalCollision = _collisionService.GetCollisionsAt(item, item.Column, item.Row)
+                .Any(c => c.Id != item.Id);
+
+            if (!finalCollision && !HasAnyCollision())
+            {
+                return PlacementResult.Success;
+            }
+        }
+
+        // Si falla, revertir a las posiciones originales
+        RevertToOriginalPositions(originalPositions);
+
+        // Intentar colocación alternativa
+        return await TryAlternativePlacementAsync(item, boundedTargetCol, boundedTargetRow);
+    }
+
+    private async Task<bool> ProcessCollisionAsync(
+        GridItem collidingItem,
+        GridItem pushingItem,
+        int deltaCol,
+        int deltaRow,
+        HashSet<Guid> processedItems,
+        Dictionary<Guid, (int Column, int Row)> originalPositions,
+        int recursionLevel)
+    {
+        // Evitar recursión infinita
+        if (recursionLevel > _layout.Items.Count * 2)
+        {
+            return false;
+        }
+
+        if (processedItems.Contains(collidingItem.Id))
+        {
+            return true;
+        }
+
+        processedItems.Add(collidingItem.Id);
+
+        // Guardar posición original
+        int originalCol = collidingItem.Column;
+        int originalRow = collidingItem.Row;
+
+        // Calcular nueva posición en la dirección del empuje
+        int newCol = collidingItem.Column + deltaCol;
+        int newRow = collidingItem.Row + deltaRow;
+
+        // Verificar límites del grid
+        bool hitBoundary = false;
+
+        if (deltaCol > 0)
+        {
+            // Movimiento hacia la derecha
+            if (newCol + collidingItem.ColumnSpan - 1 > _layout.Columns)
+            {
+                hitBoundary = true;
+                // Intentar mover a la izquierda del elemento que empuja
+                newCol = pushingItem.Column - collidingItem.ColumnSpan;
+            }
+        }
+        else if (deltaCol < 0)
+        {
+            // Movimiento hacia la izquierda
+            if (newCol < 1)
+            {
+                hitBoundary = true;
+                // Intentar mover a la derecha del elemento que empuja
+                newCol = pushingItem.Column + pushingItem.ColumnSpan;
+            }
+        }
+        else if (deltaRow > 0)
+        {
+            // Movimiento hacia abajo
+            if (newRow + collidingItem.RowSpan - 1 > _layout.Rows)
+            {
+                hitBoundary = true;
+                // Intentar mover arriba del elemento que empuja
+                newRow = pushingItem.Row - collidingItem.RowSpan;
+            }
+        }
+        else if (deltaRow < 0)
+        {
+            // Movimiento hacia arriba
+            if (newRow < 1)
+            {
+                hitBoundary = true;
+                // Intentar mover abajo del elemento que empuja
+                newRow = pushingItem.Row + pushingItem.RowSpan;
+            }
+        }
+
+        // Asegurar que la nueva posición esté dentro de los límites
+        newCol = Math.Max(1, Math.Min(newCol, _layout.Columns - collidingItem.ColumnSpan + 1));
+        newRow = Math.Max(1, Math.Min(newRow, _layout.Rows - collidingItem.RowSpan + 1));
+
+        // Aplicar la nueva posición
+        collidingItem.Column = newCol;
+        collidingItem.Row = newRow;
+
+        // Si encontramos un borde, intentar una colocación alternativa
+        if (hitBoundary)
+        {
+            // Buscar posición libre más cercana en la dirección opuesta
+            var alternativePosition = await FindAlternativePositionForBlockedItem(
+                collidingItem,
+                pushingItem,
+                deltaCol,
+                deltaRow);
+
+            if (alternativePosition.success)
+            {
+                collidingItem.Column = alternativePosition.col;
+                collidingItem.Row = alternativePosition.row;
+            }
+            else
+            {
+                // No se encontró posición alternativa, revertir
+                collidingItem.Column = originalCol;
+                collidingItem.Row = originalRow;
+                return false;
+            }
+        }
+
+        // Verificar colisiones con el nuevo elemento
+        var newCollisions = _collisionService.GetCollisionsAt(collidingItem, collidingItem.Column, collidingItem.Row)
+            .Where(c => !processedItems.Contains(c.Id))
+            .ToList();
+
+        // Procesar colisiones recursivamente
+        foreach (GridItem newCollision in newCollisions)
+        {
+            bool resolved = await ProcessCollisionAsync(
+                newCollision,
+                collidingItem,
+                deltaCol,
+                deltaRow,
+                processedItems,
+                originalPositions,
+                recursionLevel + 1);
+
+            if (!resolved)
+            {
+                // Si falla, revertir este elemento
+                collidingItem.Column = originalCol;
+                collidingItem.Row = originalRow;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private async Task<(bool success, int col, int row)> FindAlternativePositionForBlockedItem(
+        GridItem blockedItem,
+        GridItem pushingItem,
+        int deltaCol,
+        int deltaRow)
+    {
+        // Primero intentar en la dirección opuesta
+        int oppositeDeltaCol = -deltaCol;
+        int oppositeDeltaRow = -deltaRow;
+
+        for (int distance = 1; distance <= Math.Max(_layout.Columns, _layout.Rows); distance++)
+        {
+            int tryCol = blockedItem.Column;
+            int tryRow = blockedItem.Row;
+
+            if (deltaCol != 0)
+            {
+                // Movimiento horizontal original, intentar verticalmente
+                tryRow = blockedItem.Row + (distance % 2 == 0 ? distance / 2 : -(distance / 2 + 1));
+            }
+            else if (deltaRow != 0)
+            {
+                // Movimiento vertical original, intentar horizontalmente
+                tryCol = blockedItem.Column + (distance % 2 == 0 ? distance / 2 : -(distance / 2 + 1));
+            }
+
+            // Ajustar a los límites del grid
+            tryCol = Math.Max(1, Math.Min(tryCol, _layout.Columns - blockedItem.ColumnSpan + 1));
+            tryRow = Math.Max(1, Math.Min(tryRow, _layout.Rows - blockedItem.RowSpan + 1));
+
+            // Verificar si la posición está libre
+            if (!_collisionService.HasCollision(blockedItem, tryCol, tryRow))
+            {
+                return (true, tryCol, tryRow);
+            }
+        }
+
+        return (false, blockedItem.Column, blockedItem.Row);
+    }
+
+    private bool HasAnyCollision()
+    {
+        foreach (var item in _layout.Items)
+        {
+            if (_collisionService.HasCollision(item, item.Column, item.Row))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void RevertToOriginalPositions(Dictionary<Guid, (int Column, int Row)> originalPositions)
+    {
+        foreach (GridItem item in _layout.Items)
+        {
+            if (originalPositions.TryGetValue(item.Id, out var originalPos))
+            {
+                item.Column = originalPos.Column;
+                item.Row = originalPos.Row;
+            }
+        }
+    }
+
+    private async Task<PlacementResult> TryAlternativePlacementAsync(GridItem item, int targetCol, int targetRow)
+    {
+        // Intentar encontrar la posición libre más cercana
+        var result = await FindClosestFreePositionAsync(item, targetCol, targetRow);
+
+        if (result == PlacementResult.Success)
         {
             return PlacementResult.Success;
         }
 
-        RevertToOriginalPositions(originalPositions);
-
-        return await TryAlternativePlacementAsync(item, boundedTargetCol, boundedTargetRow,
-            deltaCol, deltaRow);
+        return PlacementResult.Failed;
     }
 
     public HashSet<(int, int)> GetItemCells(DragState dragState)
     {
         GridItem item = dragState.DraggingItem;
-        int? targetCol = dragState.FinalDropTarget.Value.Col;
-        int? targetRow = dragState.FinalDropTarget.Value.Row;
+        int? targetCol = dragState.FinalDropTarget?.Col;
+        int? targetRow = dragState.FinalDropTarget?.Row;
 
         var cells = new HashSet<(int, int)>();
         int startCol = targetCol ?? item.Column;
@@ -82,147 +332,8 @@ public class GridPlacementService
         return cells;
     }
 
-    private async Task<bool> ProcessCollisionAsync(GridItem collidingItem, GridItem pushingItem,
-        int deltaCol, int deltaRow, HashSet<Guid> processedItems,
-        Dictionary<Guid, (int Column, int Row)> originalPositions)
+    public async Task<PlacementResult> FindClosestFreePositionAsync(GridItem item, int targetCol, int targetRow)
     {
-        if (processedItems.Contains(collidingItem.Id))
-        {
-            return true;
-        }
-
-        processedItems.Add(collidingItem.Id);
-
-        int newCol = collidingItem.Column;
-        int newRow = collidingItem.Row;
-
-        if (deltaCol != 0)
-        {
-            newCol = collidingItem.Column + Math.Sign(deltaCol);
-            newRow = collidingItem.Row;
-        }
-        else if (deltaRow != 0)
-        {
-            newCol = collidingItem.Column;
-            newRow = collidingItem.Row + Math.Sign(deltaRow);
-        }
-
-        bool hitBoundary = false;
-
-        if (deltaCol > 0 && newCol + collidingItem.ColumnSpan - 1 > _layout.Columns)
-        {
-            newCol = pushingItem.Column - collidingItem.ColumnSpan;
-            hitBoundary = true;
-        }
-        else if (deltaCol < 0 && newCol < 1)
-        {
-            newCol = pushingItem.Column + pushingItem.ColumnSpan;
-            hitBoundary = true;
-        }
-        else if (deltaRow > 0 && newRow + collidingItem.RowSpan - 1 > _layout.Rows)
-        {
-            newRow = pushingItem.Row - collidingItem.RowSpan;
-            hitBoundary = true;
-        }
-        else if (deltaRow < 0 && newRow < 1)
-        {
-            newRow = pushingItem.Row + pushingItem.RowSpan;
-            hitBoundary = true;
-        }
-
-        newCol = Math.Max(1, Math.Min(newCol, _layout.Columns - collidingItem.ColumnSpan + 1));
-        newRow = Math.Max(1, Math.Min(newRow, _layout.Rows - collidingItem.RowSpan + 1));
-
-        int originalCol = collidingItem.Column;
-        int originalRow = collidingItem.Row;
-
-        collidingItem.Column = newCol;
-        collidingItem.Row = newRow;
-
-        List<GridItem> newCollisions = _collisionService.GetCollisionsAt(collidingItem, newCol, newRow)
-            .Where(c => !processedItems.Contains(c.Id))
-            .ToList();
-
-        foreach (GridItem newCollision in newCollisions)
-        {
-            bool ok = await ProcessCollisionAsync(newCollision, collidingItem, deltaCol, deltaRow, processedItems, originalPositions);
-            if (!ok)
-            {
-                collidingItem.Column = originalCol;
-                collidingItem.Row = originalRow;
-                return false;
-            }
-        }
-
-        if (hitBoundary && _collisionService.HasCollision(collidingItem, newCol, newRow))
-        {
-            bool foundAlternative = await ProcessCollisionAsync(collidingItem, pushingItem, deltaCol, deltaRow, processedItems, originalPositions);
-            if (!foundAlternative)
-            {
-                collidingItem.Column = originalCol;
-                collidingItem.Row = originalRow;
-                return false;
-            }
-
-            newCollisions = _collisionService.GetCollisionsAt(collidingItem, collidingItem.Column, collidingItem.Row)
-                .Where(c => !processedItems.Contains(c.Id))
-                .ToList();
-
-            foreach (GridItem newCollision in newCollisions)
-            {
-                bool ok = await ProcessCollisionAsync(newCollision, collidingItem,
-                                          deltaCol, deltaRow, processedItems, originalPositions);
-                if (!ok)
-                {
-                    collidingItem.Column = originalCol;
-                    collidingItem.Row = originalRow;
-                    return false;
-                }
-            }
-        }
-
-        return true;
-    }
-
-    private bool HasAnyCollision()
-    {
-        bool result = false;
-        int i = 0;
-        while (i < _layout.Items.Count)
-        {
-            if (_collisionService.HasCollision(_layout.Items[i], _layout.Items[i].Column, _layout.Items[i].Row))
-            {
-                result = true;
-                i = _layout.Items.Count;
-            }
-            i++;
-        }
-        return result;
-    }
-
-    private void RevertToOriginalPositions(Dictionary<Guid, (int Column, int Row)> originalPositions)
-    {
-        foreach (GridItem item in _layout.Items)
-        {
-            if (originalPositions.TryGetValue(item.Id, out var originalPos))
-            {
-                item.Column = originalPos.Column;
-                item.Row = originalPos.Row;
-            }
-        }
-    }
-
-    private async Task<PlacementResult> TryAlternativePlacementAsync(GridItem item,
-        int targetCol, int targetRow, int deltaCol, int deltaRow)
-    {
-        // Implementación de intentos alternativos...
-        return PlacementResult.Failed;
-    }
-
-    public async Task<PlacementResult> FindClosestFreePositionAsync(GridItem item,
-        int targetCol, int targetRow)
-    {
-
         HashSet<(int, int)> visited = new HashSet<(int, int)>();
         Queue<(int col, int row, int distance)> queue = new Queue<(int col, int row, int distance)>();
 
@@ -237,9 +348,10 @@ public class GridPlacementService
             {
                 item.Column = col;
                 item.Row = row;
-                queue.Clear();
+                return PlacementResult.Success;
             }
 
+            // Explorar en las 4 direcciones
             (int, int)[] neighbors = new (int, int)[]
             {
                 (col + 1, row), (col - 1, row),
@@ -257,7 +369,8 @@ public class GridPlacementService
                 }
             }
         }
-        return PlacementResult.Success;
+
+        return PlacementResult.Failed;
     }
 
     public bool TryPlaceNewItem(GridItem newItem)
@@ -298,5 +411,4 @@ public class GridPlacementService
         }
         return placed;
     }
-
 }
