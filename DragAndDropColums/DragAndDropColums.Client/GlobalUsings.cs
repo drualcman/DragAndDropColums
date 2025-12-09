@@ -1,6 +1,5 @@
-global using DragAndDropColums.Client.Models;
-global using DragAndDropColums.Client.Services;
-global using DragAndDropColums.Client.ValueObjects;
+global using BlazorBasics.DraggableGrid;
+global using BlazorBasics.DraggableGrid.Models;
+global using BlazorBasics.DraggableGrid.Services;
 global using Microsoft.AspNetCore.Components;
-global using Microsoft.AspNetCore.Components.Web;
 global using System.Text.Json;

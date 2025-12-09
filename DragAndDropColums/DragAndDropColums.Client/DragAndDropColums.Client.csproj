@@ -12,4 +12,8 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BlazorLibraries\BlazorBasics.DraggableGrid\BlazorBasics.DraggableGrid\BlazorBasics.DraggableGrid.csproj" />
+  </ItemGroup>
+
 </Project>

@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="../BlazorLibraries/BlazorBasics.DraggableGrid/BlazorBasics.DraggableGrid/BlazorBasics.DraggableGrid.csproj" />
   <Project Path="DragAndDropColums/DragAndDropColums.Client/DragAndDropColums.Client.csproj" />
   <Project Path="DragAndDropColums/DragAndDropColums/DragAndDropColums.csproj" />
 </Solution>
