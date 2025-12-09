@@ -9,6 +9,7 @@ public partial class GridVisualization<TData> : IDisposable
     [Parameter] public EventCallback<GridLayout> LayoutChanged { get; set; }
     [Parameter] public EventCallback<GridItem> OnItemRemoved { get; set; }
     [Parameter] public bool AllowKeyboardControls { get; set; } = true;
+    [Parameter] public GridTheme Theme { get; set; } = GridTheme.Default;
 
     private DragState _dragState = new();
     private GridCollisionService _collisionService;
@@ -27,11 +28,28 @@ public partial class GridVisualization<TData> : IDisposable
     {
         _collisionService = new GridCollisionService(Layout);
         _placementService = new GridPlacementService(Layout, _collisionService);
-        _styleService = new GridStyleService(Layout);
+        _styleService = new GridStyleService(Layout, Theme);
         _dragService = new DragService(Layout);
     }
 
     private string GetGridStyle() => _styleService.GetGridStyle();
+
+    private string GetThemeStyles()
+    {
+        return $"--grid-bg: {Theme.GridBackground}; " +
+               $"--grid-border: {Theme.GridBorderColor}; " +
+               $"--item-border: {Theme.ItemBorderColor}; " +
+               $"--item-shadow: {Theme.ItemShadowColor}; " +
+               $"--hover-shadow: {Theme.ItemHoverShadowColor}; " +
+               $"--selected-color: {Theme.SelectedColor}; " +
+               $"--selected-glow: {Theme.SelectedGlowColor}; " +
+               $"--dragging-color: {Theme.DraggingColor}; " +
+               $"--dragging-glow: {Theme.DraggingGlowColor}; " +
+               $"--drop-area-color: {Theme.DropAreaColor}; " +
+               $"--drop-area-bg: {Theme.DropAreaBackground}; " +
+               $"--drop-area-glow: {Theme.DropAreaGlowColor}; " +
+               $"--drop-area-light-glow: {Theme.DropAreaLightGlowColor};";
+    }
 
     private string GetItemStyle(GridItem item)
     {

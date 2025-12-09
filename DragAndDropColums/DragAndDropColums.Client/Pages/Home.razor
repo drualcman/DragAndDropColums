@@ -4,7 +4,7 @@
 
 <div class="demo-container">
 
-    <GridVisualization @bind-Layout="gridLayout" TData="string">
+    <GridVisualization @bind-Layout="gridLayout" TData="string" Theme="GridTheme.DarkTheme">
         <p>@context</p>
     </GridVisualization>
 
@@ -22,32 +22,28 @@
                 Row = 1,
                 ColumnSpan = 2,
                 RowSpan = 2,
-                Data = "Título Principal",
-                BackgroundColor = "#FFCCCC"
+                Data = "Título Principal"
             },
             new() {
                 Column = 4,
                 Row = 1,
                 ColumnSpan = 2,
                 RowSpan = 2,
-                Data = "Subtítulo o descripción breve",
-                BackgroundColor = "#CCFFCC"
+                Data = "Subtítulo o descripción breve"
             },
             new() {
                 Column = 1,
                 Row = 4,
                 ColumnSpan = 2,
                 RowSpan = 2,
-                Data = "Contenido principal que puede ser más largo y ocupar múltiples celdas. Ideal para mostrar información detallada.",
-                BackgroundColor = "#CCCCFF"
+                Data = "Contenido principal que puede ser más largo y ocupar múltiples celdas. Ideal para mostrar información detallada."
             },
             new() {
                 Column = 6,
                 Row = 3,
                 ColumnSpan = 2,
                 RowSpan = 2,
-                Data = "Panel lateral o sidebar con información adicional",
-                BackgroundColor = "#FFFFCC"
+                Data = "Panel lateral o sidebar con información adicional"
             },
         }
     };

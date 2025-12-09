@@ -17,9 +17,6 @@
     {
         <div class="selected-item-info">
             <strong>Seleccionado:</strong>
-            <span class="selected-item-label" style="background-color: @_selectedItem.BackgroundColor;">
-                @_selectedItem.Data.ToString()
-            </span>
             <span class="selected-item-details">
                 (@_selectedItem.Column,@_selectedItem.Row) - Tamaño: @_selectedItem.ColumnSpan×@_selectedItem.RowSpan
             </span>
@@ -86,12 +83,6 @@
                        @bind="_selectedItem.RowSpan" @bind:event="oninput" />
                 <span>@_selectedItem.RowSpan</span>
             </div>
-        </div>
-
-        <div class="editor-section">
-            <label>🎨 Color de fondo:</label>
-            <input type="color" @bind="_selectedItem.BackgroundColor" class="color-picker" />
-            <input type="text" @bind="_selectedItem.BackgroundColor" class="color-text" />
         </div>
 
         <div class="editor-actions">
