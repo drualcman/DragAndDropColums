@@ -4,18 +4,18 @@
 
 <div class="demo-container">
 
-    <GridVisualization @bind-Layout="gridLayout">
+    <GridVisualization @bind-Layout="gridLayout" TData="string">
         <p>@context</p>
     </GridVisualization>
 
 </div>
 
 @code {
-    private GridLayout<string> gridLayout = new()
+    private GridLayout gridLayout = new()
     {
         Columns = 8,
         Rows = 10,
-        Items = new List<GridItem<string>>
+        Items = new List<GridItem>
         {
             new() {
                 Column = 1,

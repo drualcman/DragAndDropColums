@@ -78,7 +78,14 @@
                     }
                     else
                     {
-                        @ChildContent(item.Data)
+                        if (item.IsDataOfType<TData>())
+                        {
+                            @ChildContent(item.GetData<TData>())
+                        }
+                        else
+                        {
+                            <em>Wrong data type</em>
+                        }
                     }
                 </div>
 

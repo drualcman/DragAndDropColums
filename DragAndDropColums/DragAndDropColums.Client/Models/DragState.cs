@@ -1,8 +1,8 @@
 ﻿namespace DragAndDropColums.Client.Models;
 
-public class DragState<TData>
+public class DragState
 {
-    public GridItem<TData>? DraggingItem { get; set; }
+    public GridItem? DraggingItem { get; set; }
     public bool IsDragging { get; set; }
     public string? DragCursorClass { get; set; }
     public (int ClientX, int ClientY)? DragStartMouse { get; set; }

@@ -1,5 +1,4 @@
-﻿@typeparam TData
-<div class="grid-controls">
+﻿<div class="grid-controls">
     <button @onclick="AddNewItem" class="btn btn-primary">➕ Agregar Elemento</button>
     <button @onclick="ResetGrid" class="btn btn-secondary">🔄 Reiniciar</button>
     <div class="grid-info">
@@ -61,7 +60,7 @@
 </div>
 
 <!-- Grid Visualization Component -->
-<GridVisualization @ref="_gridVisualization" TData=TData
+<GridVisualization @ref="_gridVisualization" TData=object
                    Layout="Layout"
                    SelectedItem="_selectedItem"
                    SelectedItemChanged="OnSelectedItemChanged"
