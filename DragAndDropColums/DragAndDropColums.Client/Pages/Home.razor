@@ -3,17 +3,9 @@
 <PageTitle>Grid Dinámico - Demo</PageTitle>
 
 <div class="demo-container">
-    @* <h1>🏗️ Grid Dinámico Interactivo</h1>
-    <p class="lead">Organiza elementos en una grid con diferentes tamaños y posiciones</p>
-     *@
+
     <GridVisualization @bind-Layout="gridLayout" />
-    
-    @* <div class="demo-info">
-        <h3>📊 Información del Layout</h3>
-        <p><strong>Elementos:</strong> @gridLayout.Items.Count</p>
-        <p><strong>Grid:</strong> @gridLayout.Columns × @gridLayout.Rows</p>
-        <button @onclick="ExportLayout" class="btn btn-info">📤 Exportar JSON</button>
-    </div> *@
+
 </div>
 
 @code {
@@ -57,19 +49,4 @@
             },
         }
     };
-    
-    private void ExportLayout()
-    {
-        var json = JsonSerializer.Serialize(gridLayout, new JsonSerializerOptions 
-        { 
-            WriteIndented = true 
-        });
-        
-        // En una aplicación real, podrías:
-        // 1. Copiar al portapapeles
-        // 2. Mostrar en un modal
-        // 3. Descargar como archivo
-        Console.WriteLine("JSON exportado:");
-        Console.WriteLine(json);
-    }
 }
