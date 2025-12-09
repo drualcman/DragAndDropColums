@@ -76,26 +76,28 @@
         {
             @for (int col = 1; col <= Layout.Columns; col++)
             {
+                int c = col;
+                int r = row;
                 bool isCorner = false;
                 string cornerClass = "";
 
                 if (_dragState.IsDragging && _dragState.DraggingItem != null && _dragState.FinalDropTarget.HasValue)
                 {
-                    isCorner = _styleService.IsDropAreaCorner(col, row, _dragState.DraggingItem, _dragState.FinalDropTarget.Value);
+                    isCorner = _styleService.IsDropAreaCorner(c, r, _dragState.DraggingItem, _dragState.FinalDropTarget.Value);
                     if (isCorner)
                     {
                         cornerClass = "drop-area-corner";
                     }
                 }
 
-                bool isOccupied = _occupiedCells.Contains((col, row));
+                bool isOccupied = _occupiedCells.Contains((c, r));
 
                 // Calcula si esta celda está en el área de drop del elemento que se está arrastrando
                 bool isInDropArea = false;
                 if (_dragState.IsDragging && _dragState.DraggingItem != null && _dragState.FinalDropTarget.HasValue)
                 {
                     var dropCells = _placementService.GetItemCells(_dragState);
-                    isInDropArea = dropCells.Contains((col, row));
+                    isInDropArea = dropCells.Contains((c, r));
                     var target = _dragState.FinalDropTarget.Value;
                     <div class="drop-area-highlight"
                          style="grid-column: @target.Col / span @_dragState.DraggingItem.ColumnSpan;
@@ -103,12 +105,11 @@
                                         pointer-events: none;">
                     </div>
                 }
-
                 <div class="grid-cell @(isInDropArea ? "drop-target" : "") @cornerClass"
-                     style="grid-column: @col; grid-row: @row; @(isOccupied && !isInDropArea ? "visibility: hidden;" : "")"
+                     style="grid-column: @c; grid-row: @r; @(isOccupied && !isInDropArea ? "visibility: hidden;" : "")"
                      @onclick:preventDefault
-                     @onclick="@(() => CellClicked(col, row))">
-                    <small>@col,@row</small>
+                     @onclick="@(() => CellClicked(c, r))">
+                    <small>@c,@r</small>
                     @if (isInDropArea && _dragState.IsDragging)
                     {
                         <div class="drop-indicator">Drop</div>
@@ -146,10 +147,6 @@
                     <div class="item-size">
                         <small>@item.ColumnSpan×@item.RowSpan</small>
                     </div>
-                    @if (_selectedItem?.Id == item.Id)
-                    {
-                        <div class="selected-indicator">★</div>
-                    }
                 </div>
             </div>
         }
