@@ -38,28 +38,22 @@ public class GridPlacementService
             return PlacementResult.Success;
         }
 
-        // CASO 2: Intentar empujar en la dirección del movimiento (PRIMERO)
-        // Calcular dirección del movimiento
+        // CASO 2: Intentar redistribución inteligente
+        var redistributionResult = await TryIntelligentRedistributionAsync(
+            item,
+            boundedTargetCol,
+            boundedTargetRow,
+            originalPositions);
+
+        if (redistributionResult == PlacementResult.Success)
+        {
+            return PlacementResult.Success;
+        }
+
+        // CASO 3: Intentar empujar en la dirección del movimiento
         int deltaCol = Math.Sign(boundedTargetCol - originalItemCol);
         int deltaRow = Math.Sign(boundedTargetRow - originalItemRow);
 
-        // Si el movimiento es diagonal, priorizamos la dirección más fuerte
-        if (deltaCol != 0 && deltaRow != 0)
-        {
-            int colDistance = Math.Abs(boundedTargetCol - originalItemCol);
-            int rowDistance = Math.Abs(boundedTargetRow - originalItemRow);
-
-            if (colDistance >= rowDistance)
-            {
-                deltaRow = 0; // Priorizar movimiento horizontal
-            }
-            else
-            {
-                deltaCol = 0; // Priorizar movimiento vertical
-            }
-        }
-
-        // Si hay movimiento en alguna dirección, intentar empujar primero
         if (deltaCol != 0 || deltaRow != 0)
         {
             var pushResult = await TryPushInDirectionAsync(
@@ -76,29 +70,282 @@ public class GridPlacementService
             }
         }
 
-        // CASO 3: Si el empuje falló, verificar si hay EXACTAMENTE UNA colisión para intercambio
+        // CASO 4: Si hay EXACTAMENTE UNA colisión para intercambio
         if (collisions.Count == 1)
         {
             GridItem targetItem = collisions[0];
 
-            // Verificar si los elementos tienen el mismo tamaño (intercambio directo posible)
             bool canSwapDirectly = item.ColumnSpan == targetItem.ColumnSpan &&
                                    item.RowSpan == targetItem.RowSpan;
 
             if (canSwapDirectly)
             {
-                // Intercambio directo de posiciones
                 return await TrySwapItemsAsync(item, targetItem, originalPositions);
             }
             else
             {
-                // Intercambio complejo - el elemento objetivo busca nueva posición
                 return await TryComplexSwapAsync(item, targetItem, originalPositions);
             }
         }
 
-        // CASO 4: Si nada funcionó, intentar colocación alternativa
+        // CASO 5: Si nada funcionó, intentar colocación alternativa
         return await TryAlternativePlacementAsync(item, boundedTargetCol, boundedTargetRow);
+    }
+    private async Task<PlacementResult> TryIntelligentRedistributionAsync(
+        GridItem item,
+        int targetCol,
+        int targetRow,
+        Dictionary<Guid, (int Column, int Row)> originalPositions)
+    {
+        // Analizar el área objetivo y sus alrededores
+        var affectedArea = AnalyzeAffectedArea(item, targetCol, targetRow);
+
+        if (affectedArea.collisions.Count == 0)
+        {
+            // No debería pasar, pero por si acaso
+            item.Column = targetCol;
+            item.Row = targetRow;
+            return PlacementResult.Success;
+        }
+
+        // Crear un plan de redistribución
+        var redistributionPlan = await CreateRedistributionPlanAsync(
+            item, targetCol, targetRow, affectedArea);
+
+        if (redistributionPlan == null)
+        {
+            return PlacementResult.Failed;
+        }
+
+        // Aplicar el plan
+        return await ExecuteRedistributionPlanAsync(item, targetCol, targetRow,
+            redistributionPlan, originalPositions);
+    }
+
+    private (List<GridItem> collisions, HashSet<(int, int)> occupiedCells,
+            Dictionary<GridItem, List<(int, int)>> possibleMoves)
+        AnalyzeAffectedArea(GridItem item, int targetCol, int targetRow)
+    {
+        var collisions = _collisionService.GetCollisionsAt(item, targetCol, targetRow);
+        var occupiedCells = new HashSet<(int, int)>();
+        var possibleMoves = new Dictionary<GridItem, List<(int, int)>>();
+
+        // Calcular todas las celdas ocupadas en el área afectada
+        foreach (var collidingItem in collisions)
+        {
+            var cells = _collisionService.GetItemCells(collidingItem);
+            occupiedCells.UnionWith(cells);
+
+            // Encontrar movimientos posibles para este elemento
+            possibleMoves[collidingItem] = FindPossibleMovesForItem(collidingItem);
+        }
+
+        return (collisions, occupiedCells, possibleMoves);
+    }
+
+
+    private List<(int col, int row)> FindPossibleMovesForItem(GridItem item)
+    {
+        var possibleMoves = new List<(int col, int row)>();
+
+        // Buscar posiciones libres alrededor del elemento
+        int[] colOffsets = { -1, 0, 1, -1, 1, -1, 0, 1 };
+        int[] rowOffsets = { -1, -1, -1, 0, 0, 1, 1, 1 };
+
+        for (int i = 0; i < colOffsets.Length; i++)
+        {
+            int tryCol = item.Column + colOffsets[i];
+            int tryRow = item.Row + rowOffsets[i];
+
+            // Verificar límites
+            if (tryCol < 1 || tryCol + item.ColumnSpan - 1 > _layout.Columns ||
+                tryRow < 1 || tryRow + item.RowSpan - 1 > _layout.Rows)
+            {
+                continue;
+            }
+
+            // Verificar si está libre
+            if (!_collisionService.HasCollision(item, tryCol, tryRow))
+            {
+                possibleMoves.Add((tryCol, tryRow));
+            }
+        }
+
+        return possibleMoves;
+    }
+
+    private async Task<Dictionary<GridItem, (int col, int row)>?>
+        CreateRedistributionPlanAsync(
+            GridItem movingItem,
+            int targetCol,
+            int targetRow,
+            (List<GridItem> collisions, HashSet<(int, int)> occupiedCells,
+             Dictionary<GridItem, List<(int, int)>> possibleMoves) analysis)
+    {
+        var plan = new Dictionary<GridItem, (int col, int row)>();
+        var processedItems = new HashSet<Guid> { movingItem.Id };
+
+        // Primero, calcular la dirección general del movimiento
+        int centerCol = targetCol + movingItem.ColumnSpan / 2;
+        int centerRow = targetRow + movingItem.RowSpan / 2;
+
+        // Para cada elemento en colisión, determinar la mejor dirección para moverlo
+        foreach (var collidingItem in analysis.collisions)
+        {
+            if (processedItems.Contains(collidingItem.Id))
+                continue;
+
+            var bestMove = await FindBestMoveDirectionAsync(
+                collidingItem, movingItem,
+                centerCol, centerRow, analysis.possibleMoves[collidingItem]);
+
+            if (bestMove.HasValue)
+            {
+                plan[collidingItem] = bestMove.Value;
+                processedItems.Add(collidingItem.Id);
+            }
+            else
+            {
+                // Si no encontramos movimiento para un elemento, el plan falla
+                return null;
+            }
+        }
+
+        return plan.Count > 0 ? plan : null;
+    }
+
+    private async Task<(int col, int row)?> FindBestMoveDirectionAsync(
+        GridItem item,
+        GridItem movingItem,
+        int centerCol,
+        int centerRow,
+        List<(int col, int row)> possibleMoves)
+    {
+        if (possibleMoves.Count == 0)
+            return null;
+
+        // Calcular el centro del elemento actual
+        int itemCenterCol = item.Column + item.ColumnSpan / 2;
+        int itemCenterRow = item.Row + item.RowSpan / 2;
+
+        // Calcular vector desde el elemento actual al centro del área objetivo
+        int vectorCol = centerCol - itemCenterCol;
+        int vectorRow = centerRow - itemCenterRow;
+
+        // Normalizar el vector (determinar dirección principal)
+        int dirCol = Math.Sign(vectorCol);
+        int dirRow = Math.Sign(vectorRow);
+
+        // Si estamos en la misma fila/columna, preferir moverse perpendicularmente
+        if (dirCol == 0 && dirRow == 0)
+        {
+            // Buscar el movimiento más cercano al borde del grid
+            return possibleMoves
+                .OrderBy(m => Math.Abs(m.col - 1) + Math.Abs(m.col - _layout.Columns) +
+                             Math.Abs(m.row - 1) + Math.Abs(m.row - _layout.Rows))
+                .FirstOrDefault();
+        }
+
+        // Priorizar movimientos en la dirección opuesta al vector
+        var prioritizedMoves = possibleMoves
+            .Select(m => new
+            {
+                Move = m,
+                // Puntuar basado en qué tan bien se aleja del centro
+                Score = CalculateMoveScore(m, item, dirCol, dirRow, centerCol, centerRow)
+            })
+            .OrderByDescending(x => x.Score)
+            .ToList();
+
+        return prioritizedMoves.FirstOrDefault()?.Move;
+    }
+
+    private int CalculateMoveScore(
+        (int col, int row) move,
+        GridItem item,
+        int dirCol, int dirRow,
+        int centerCol, int centerRow)
+    {
+        int score = 0;
+
+        // Calcular nuevo centro después del movimiento
+        int newCenterCol = move.col + item.ColumnSpan / 2;
+        int newCenterRow = move.row + item.RowSpan / 2;
+
+        // Puntos por alejarse del centro
+        int oldDistance = Math.Abs(centerCol - (item.Column + item.ColumnSpan / 2)) +
+                         Math.Abs(centerRow - (item.Row + item.RowSpan / 2));
+        int newDistance = Math.Abs(centerCol - newCenterCol) +
+                         Math.Abs(centerRow - newCenterRow);
+
+        if (newDistance > oldDistance)
+            score += 10;
+
+        // Puntos por moverse en la dirección opuesta
+        int moveDirCol = Math.Sign(move.col - item.Column);
+        int moveDirRow = Math.Sign(move.row - item.Row);
+
+        if (moveDirCol == -dirCol)
+            score += 5;
+        if (moveDirRow == -dirRow)
+            score += 5;
+
+        // Puntos por no crear nuevas colisiones
+        if (!_collisionService.HasCollision(item, move.col, move.row))
+            score += 20;
+
+        // Penalizar moverse fuera de los límites
+        if (move.col < 1 || move.col + item.ColumnSpan - 1 > _layout.Columns ||
+            move.row < 1 || move.row + item.RowSpan - 1 > _layout.Rows)
+        {
+            score -= 100;
+        }
+
+        return score;
+    }
+
+    private async Task<PlacementResult> ExecuteRedistributionPlanAsync(
+        GridItem movingItem,
+        int targetCol,
+        int targetRow,
+        Dictionary<GridItem, (int col, int row)> plan,
+        Dictionary<Guid, (int Column, int Row)> originalPositions)
+    {
+        // Aplicar movimientos en orden (primero los más lejanos del centro)
+        var orderedPlan = plan
+            .OrderByDescending(p =>
+                Math.Abs(p.Value.col - targetCol) +
+                Math.Abs(p.Value.row - targetRow))
+            .ToList();
+
+        // Mover todos los elementos según el plan
+        foreach (var (item, newPos) in orderedPlan)
+        {
+            item.Column = newPos.col;
+            item.Row = newPos.row;
+
+            // Verificar que no haya colisiones con otros elementos ya movidos
+            if (_collisionService.HasCollision(item, item.Column, item.Row))
+            {
+                // Revertir todo
+                RevertToOriginalPositions(originalPositions);
+                return PlacementResult.Failed;
+            }
+        }
+
+        // Finalmente, mover el elemento principal
+        movingItem.Column = targetCol;
+        movingItem.Row = targetRow;
+
+        // Verificar colisiones finales
+        if (_collisionService.HasCollision(movingItem, movingItem.Column, movingItem.Row) ||
+            HasAnyCollision())
+        {
+            RevertToOriginalPositions(originalPositions);
+            return PlacementResult.Failed;
+        }
+
+        return PlacementResult.Success;
     }
 
     private async Task<PlacementResult> TryPushInDirectionAsync(
