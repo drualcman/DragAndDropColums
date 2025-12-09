@@ -27,15 +27,177 @@ public class GridPlacementService
         int originalItemCol = item.Column;
         int originalItemRow = item.Row;
 
+        // Obtener colisiones iniciales en la posición objetivo
+        var collisions = _collisionService.GetCollisionsAt(item, boundedTargetCol, boundedTargetRow);
+
+        // CASO 1: Si no hay colisiones, mover directamente
+        if (collisions.Count == 0)
+        {
+            item.Column = boundedTargetCol;
+            item.Row = boundedTargetRow;
+            return PlacementResult.Success;
+        }
+
+        // CASO 2: Si hay EXACTAMENTE UNA colisión, intentar intercambio
+        if (collisions.Count == 1)
+        {
+            GridItem targetItem = collisions[0];
+
+            // Verificar si los elementos tienen el mismo tamaño (intercambio directo posible)
+            bool canSwapDirectly = item.ColumnSpan == targetItem.ColumnSpan &&
+                                   item.RowSpan == targetItem.RowSpan;
+
+            if (canSwapDirectly)
+            {
+                // Intercambio directo de posiciones
+                return await TrySwapItemsAsync(item, targetItem, originalPositions);
+            }
+            else
+            {
+                // Intercambio complejo - el elemento objetivo busca nueva posición
+                return await TryComplexSwapAsync(item, targetItem, originalPositions);
+            }
+        }
+
+        // CASO 3: Colisión con múltiples elementos - usar algoritmo de empuje
+        return await HandleMultipleCollisionsAsync(item, boundedTargetCol, boundedTargetRow,
+            originalItemCol, originalItemRow, originalPositions);
+    }
+
+    private async Task<PlacementResult> TrySwapItemsAsync(
+        GridItem movingItem,
+        GridItem targetItem,
+        Dictionary<Guid, (int Column, int Row)> originalPositions)
+    {
+        // Guardar posiciones temporales
+        int movingCol = movingItem.Column;
+        int movingRow = movingItem.Row;
+        int targetCol = targetItem.Column;
+        int targetRow = targetItem.Row;
+
+        // Intercambiar posiciones
+        movingItem.Column = targetCol;
+        movingItem.Row = targetRow;
+        targetItem.Column = movingCol;
+        targetItem.Row = movingRow;
+
+        // Verificar que no haya nuevas colisiones
+        bool movingItemCollides = _collisionService.HasCollision(movingItem, movingItem.Column, movingItem.Row);
+        bool targetItemCollides = _collisionService.HasCollision(targetItem, targetItem.Column, targetItem.Row);
+
+        if (!movingItemCollides && !targetItemCollides)
+        {
+            return PlacementResult.Success;
+        }
+        else
+        {
+            // Revertir si hay colisiones
+            movingItem.Column = movingCol;
+            movingItem.Row = movingRow;
+            targetItem.Column = targetCol;
+            targetItem.Row = targetRow;
+            return PlacementResult.Failed;
+        }
+    }
+
+    private async Task<PlacementResult> TryComplexSwapAsync(
+        GridItem movingItem,
+        GridItem targetItem,
+        Dictionary<Guid, (int Column, int Row)> originalPositions)
+    {
+        // Guardar posición original del elemento objetivo
+        int targetOriginalCol = targetItem.Column;
+        int targetOriginalRow = targetItem.Row;
+
+        // Mover el elemento principal a la posición del objetivo
+        movingItem.Column = targetItem.Column;
+        movingItem.Row = targetItem.Row;
+
+        // Buscar nueva posición para el elemento objetivo
+        bool foundNewPosition = false;
+
+        // Primero intentar mover el objetivo en la dirección opuesta al movimiento
+        int deltaCol = movingItem.Column - originalPositions[movingItem.Id].Column;
+        int deltaRow = movingItem.Row - originalPositions[movingItem.Id].Row;
+
+        if (deltaCol != 0 || deltaRow != 0)
+        {
+            int newTargetCol = targetItem.Column - Math.Sign(deltaCol);
+            int newTargetRow = targetItem.Row - Math.Sign(deltaRow);
+
+            // Ajustar a límites del grid
+            newTargetCol = Math.Max(1, Math.Min(newTargetCol,
+                _layout.Columns - targetItem.ColumnSpan + 1));
+            newTargetRow = Math.Max(1, Math.Min(newTargetRow,
+                _layout.Rows - targetItem.RowSpan + 1));
+
+            // Verificar si la posición está libre
+            if (!_collisionService.HasCollision(targetItem, newTargetCol, newTargetRow))
+            {
+                targetItem.Column = newTargetCol;
+                targetItem.Row = newTargetRow;
+                foundNewPosition = true;
+            }
+        }
+
+        // Si no funcionó, buscar posición cercana
+        if (!foundNewPosition)
+        {
+            var searchResult = await FindClosestFreePositionForItemAsync(
+                targetItem,
+                targetOriginalCol,
+                targetOriginalRow);
+
+            if (searchResult.success)
+            {
+                targetItem.Column = searchResult.col;
+                targetItem.Row = searchResult.row;
+                foundNewPosition = true;
+            }
+        }
+
+        if (foundNewPosition)
+        {
+            // Verificar que no haya colisiones después del intercambio
+            bool movingCollides = _collisionService.HasCollision(movingItem, movingItem.Column, movingItem.Row);
+            bool targetCollides = _collisionService.HasCollision(targetItem, targetItem.Column, targetItem.Row);
+
+            if (!movingCollides && !targetCollides)
+            {
+                return PlacementResult.Success;
+            }
+        }
+
+        // Revertir si falla
+        movingItem.Column = originalPositions[movingItem.Id].Column;
+        movingItem.Row = originalPositions[movingItem.Id].Row;
+        targetItem.Column = targetOriginalCol;
+        targetItem.Row = targetOriginalRow;
+
+        return PlacementResult.Failed;
+    }
+
+    private async Task<PlacementResult> HandleMultipleCollisionsAsync(
+        GridItem item,
+        int targetCol,
+        int targetRow,
+        int originalCol,
+        int originalRow,
+        Dictionary<Guid, (int Column, int Row)> originalPositions)
+    {
+        // Mover el item principal a su nueva posición
+        item.Column = targetCol;
+        item.Row = targetRow;
+
         // Calcular dirección del movimiento
-        int deltaCol = Math.Sign(boundedTargetCol - originalItemCol);
-        int deltaRow = Math.Sign(boundedTargetRow - originalItemRow);
+        int deltaCol = Math.Sign(targetCol - originalCol);
+        int deltaRow = Math.Sign(targetRow - originalRow);
 
         // Si el movimiento es diagonal, priorizamos la dirección más fuerte
         if (deltaCol != 0 && deltaRow != 0)
         {
-            int colDistance = Math.Abs(boundedTargetCol - originalItemCol);
-            int rowDistance = Math.Abs(boundedTargetRow - originalItemRow);
+            int colDistance = Math.Abs(targetCol - originalCol);
+            int rowDistance = Math.Abs(targetRow - originalRow);
 
             if (colDistance >= rowDistance)
             {
@@ -47,20 +209,11 @@ public class GridPlacementService
             }
         }
 
-        // Mover el item principal a su nueva posición
-        item.Column = boundedTargetCol;
-        item.Row = boundedTargetRow;
-
-        // Obtener colisiones iniciales
-        var collisions = _collisionService.GetCollisionsAt(item, boundedTargetCol, boundedTargetRow);
-
-        if (collisions.Count == 0)
-        {
-            return PlacementResult.Success;
-        }
-
         var processedItems = new HashSet<Guid> { item.Id };
         bool success = true;
+
+        // Obtener colisiones iniciales
+        var collisions = _collisionService.GetCollisionsAt(item, targetCol, targetRow);
 
         foreach (GridItem collidingItem in collisions)
         {
@@ -96,7 +249,7 @@ public class GridPlacementService
         RevertToOriginalPositions(originalPositions);
 
         // Intentar colocación alternativa
-        return await TryAlternativePlacementAsync(item, boundedTargetCol, boundedTargetRow);
+        return await TryAlternativePlacementAsync(item, targetCol, targetRow);
     }
 
     private async Task<bool> ProcessCollisionAsync(
@@ -241,9 +394,6 @@ public class GridPlacementService
         int deltaRow)
     {
         // Primero intentar en la dirección opuesta
-        int oppositeDeltaCol = -deltaCol;
-        int oppositeDeltaRow = -deltaRow;
-
         for (int distance = 1; distance <= Math.Max(_layout.Columns, _layout.Rows); distance++)
         {
             int tryCol = blockedItem.Column;
@@ -274,6 +424,48 @@ public class GridPlacementService
         return (false, blockedItem.Column, blockedItem.Row);
     }
 
+    private async Task<(bool success, int col, int row)> FindClosestFreePositionForItemAsync(
+        GridItem item,
+        int startCol,
+        int startRow)
+    {
+        HashSet<(int, int)> visited = new HashSet<(int, int)>();
+        Queue<(int col, int row, int distance)> queue = new Queue<(int col, int row, int distance)>();
+
+        queue.Enqueue((startCol, startRow, 0));
+        visited.Add((startCol, startRow));
+
+        while (queue.Count > 0)
+        {
+            (int col, int row, int distance) = queue.Dequeue();
+
+            if (!_collisionService.HasCollision(item, col, row))
+            {
+                return (true, col, row);
+            }
+
+            // Explorar en las 4 direcciones
+            (int, int)[] neighbors = new (int, int)[]
+            {
+                (col + 1, row), (col - 1, row),
+                (col, row + 1), (col, row - 1)
+            };
+
+            foreach ((int nCol, int nRow) in neighbors)
+            {
+                if (nCol >= 1 && nCol <= _layout.Columns - item.ColumnSpan + 1 &&
+                    nRow >= 1 && nRow <= _layout.Rows - item.RowSpan + 1 &&
+                    !visited.Contains((nCol, nRow)))
+                {
+                    visited.Add((nCol, nRow));
+                    queue.Enqueue((nCol, nRow, distance + 1));
+                }
+            }
+        }
+
+        return (false, startCol, startRow);
+    }
+
     private bool HasAnyCollision()
     {
         foreach (var item in _layout.Items)
@@ -301,10 +493,12 @@ public class GridPlacementService
     private async Task<PlacementResult> TryAlternativePlacementAsync(GridItem item, int targetCol, int targetRow)
     {
         // Intentar encontrar la posición libre más cercana
-        var result = await FindClosestFreePositionAsync(item, targetCol, targetRow);
+        var result = await FindClosestFreePositionForItemAsync(item, targetCol, targetRow);
 
-        if (result == PlacementResult.Success)
+        if (result.success)
         {
+            item.Column = result.col;
+            item.Row = result.row;
             return PlacementResult.Success;
         }
 
@@ -334,40 +528,13 @@ public class GridPlacementService
 
     public async Task<PlacementResult> FindClosestFreePositionAsync(GridItem item, int targetCol, int targetRow)
     {
-        HashSet<(int, int)> visited = new HashSet<(int, int)>();
-        Queue<(int col, int row, int distance)> queue = new Queue<(int col, int row, int distance)>();
+        var result = await FindClosestFreePositionForItemAsync(item, targetCol, targetRow);
 
-        queue.Enqueue((targetCol, targetRow, 0));
-        visited.Add((targetCol, targetRow));
-
-        while (queue.Count > 0)
+        if (result.success)
         {
-            (int col, int row, int distance) = queue.Dequeue();
-
-            if (!_collisionService.HasCollision(item, col, row))
-            {
-                item.Column = col;
-                item.Row = row;
-                return PlacementResult.Success;
-            }
-
-            // Explorar en las 4 direcciones
-            (int, int)[] neighbors = new (int, int)[]
-            {
-                (col + 1, row), (col - 1, row),
-                (col, row + 1), (col, row - 1)
-            };
-
-            foreach ((int nCol, int nRow) in neighbors)
-            {
-                if (nCol >= 1 && nCol <= _layout.Columns - item.ColumnSpan + 1 &&
-                    nRow >= 1 && nRow <= _layout.Rows - item.RowSpan + 1 &&
-                    !visited.Contains((nCol, nRow)))
-                {
-                    visited.Add((nCol, nRow));
-                    queue.Enqueue((nCol, nRow, distance + 1));
-                }
-            }
+            item.Column = result.col;
+            item.Row = result.row;
+            return PlacementResult.Success;
         }
 
         return PlacementResult.Failed;
