@@ -1,179 +1,41 @@
 namespace DragAndDropColums.Client.Components;
 
-public partial class DraggableGridComponent : IDisposable
+public partial class DraggableGridComponent
 {
     [Parameter] public GridLayout Layout { get; set; } = new();
     [Parameter] public EventCallback<GridLayout> LayoutChanged { get; set; }
 
     private GridItem? _selectedItem;
-    private DragState _dragState = new();
-    private GridCollisionService _collisionService;
-    private GridPlacementService _placementService;
-    private GridStyleService _styleService;
-    private DragService _dragService;
-    private HashSet<(int, int)> _occupiedCells = new();
+    private GridVisualization? _gridVisualization;
 
-    private void InitializeServices()
+    private async Task OnSelectedItemChanged(GridItem? item)
     {
-        _collisionService = new GridCollisionService(Layout);
-        _placementService = new GridPlacementService(Layout, _collisionService);
-        _styleService = new GridStyleService(Layout);
-        _dragService = new DragService(Layout);
-    }
-
-
-    protected override void OnParametersSet()
-    {
-        InitializeServices();
-        if (Layout.Items.Any() && _selectedItem == null)
-        {
-            _selectedItem = Layout.Items.First();
-        }
-        UpdateOccupiedCells();
-    }
-
-    private string GetGridStyle() => _styleService.GetGridStyle();
-
-    private string GetItemStyle(GridItem item)
-    {
-        bool isSelected = _selectedItem?.Id == item.Id;
-        bool isDragging = _dragState.DraggingItem?.Id == item.Id;
-        return _styleService.GetItemStyle(item, isSelected, isDragging);
-    }
-
-    private async Task StartMouseDrag(MouseEventArgs e, GridItem item)
-    {
-        _dragState.DraggingItem = item;
         _selectedItem = item;
-        _dragState.IsDragging = true;
-        _dragState.DragCursorClass = "dragging";
-        _dragState.DragStartMouse = ((int)e.ClientX, (int)e.ClientY);
-        _dragState.DragStartCell = (item.Column, item.Row);
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task HandleMouseMove(MouseEventArgs e)
+    private async Task OnLayoutChanged(GridLayout layout)
     {
-        if (!_dragState.IsDragging || _dragState.DraggingItem == null)
-            return;
-
-        _dragState.FinalDropTarget = _dragService.CalculateDragTarget(e, _dragState, _dragState.DraggingItem);
-
-        if (_dragState.FinalDropTarget.HasValue)
-        {
-            (int col, int row) = _dragState.FinalDropTarget.Value;
-            _dragState.HoverTarget = (col, row);
-            await InvokeAsync(StateHasChanged);
-        }
-    }
-
-    private async Task HandleMouseUp(MouseEventArgs e)
-    {
-        if (_dragState.IsDragging && _dragState.DraggingItem != null &&
-            _dragState.FinalDropTarget.HasValue)
-        {
-            (int col, int row) = _dragState.FinalDropTarget.Value;
-            await _placementService.PlaceItemAsync(_dragState.DraggingItem, col, row);
-            await LayoutChanged.InvokeAsync(Layout);
-        }
-
-        await CleanUpDrag();
-    }
-
-    private async Task CleanUpDrag()
-    {
-        _dragState.Reset();
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private async Task MoveSelectedItem(int deltaCol, int deltaRow)
-    {
-        if (_selectedItem == null)
-            return;
-
-        int newCol = _selectedItem.Column + deltaCol;
-        int newRow = _selectedItem.Row + deltaRow;
-
-        await MoveItem(newCol, newRow);
-    }
-
-    private async Task MoveItem(int newCol, int newRow)
-    {
-        if (_selectedItem == null)
-            return;
-
-        await _placementService.PlaceItemAsync(_selectedItem, newCol, newRow);
+        Layout = layout;
         await LayoutChanged.InvokeAsync(Layout);
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task SelectItem(GridItem item)
+    private async Task AddNewItem()
     {
-        if (_selectedItem?.Id == item.Id)
-            return;
-        _selectedItem = item;
+        var newItem = GridItemFactory.CreateNewItem(Layout.Items.Count + 1);
+        Layout.Items.Add(newItem);
+        _selectedItem = newItem;
+        await LayoutChanged.InvokeAsync(Layout);
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task CellClicked(int col, int row)
+    private async Task ResetGrid()
     {
-        if (_dragState.IsDragging)
-            return;
-
-        GridItem? itemAtCell = _collisionService.FindItemAtPosition(col, row);
-
-        if (itemAtCell != null)
-        {
-            await SelectItem(itemAtCell);
-            return;
-        }
-        await MoveItem(col, row);
-    }
-
-    private async Task DeselectItem()
-    {
+        Layout.Items.Clear();
         _selectedItem = null;
+        await LayoutChanged.InvokeAsync(Layout);
         await InvokeAsync(StateHasChanged);
-    }
-
-    private async Task HandleKeyDown(KeyboardEventArgs e)
-    {
-        switch (e.Key)
-        {
-            case "ArrowUp":
-                await MoveSelectedItem(0, -1);
-                break;
-            case "ArrowDown":
-                await MoveSelectedItem(0, 1);
-                break;
-            case "ArrowLeft":
-                await MoveSelectedItem(-1, 0);
-                break;
-            case "ArrowRight":
-                await MoveSelectedItem(1, 0);
-                break;
-            case "Delete":
-            case "Backspace":
-                if (_selectedItem != null)
-                {
-                    await RemoveItem(_selectedItem);
-                }
-                break;
-            case "Escape":
-                await DeselectItem();
-                break;
-            case " ":
-                if (_selectedItem != null)
-                {
-                    await DeselectItem();
-                }
-                else if (Layout.Items.Any())
-                {
-                    _selectedItem = Layout.Items.First();
-                    await InvokeAsync(StateHasChanged);
-                }
-                break;
-        }
     }
 
     private async Task RemoveItem(GridItem item)
@@ -187,100 +49,37 @@ public partial class DraggableGridComponent : IDisposable
         await LayoutChanged.InvokeAsync(Layout);
         await InvokeAsync(StateHasChanged);
     }
-    private void UpdateOccupiedCells()
+
+    private async Task MoveSelectedItem(int deltaCol, int deltaRow)
     {
-        _occupiedCells.Clear();
-        foreach (var item in Layout.Items)
+        if (_gridVisualization != null)
         {
-            var cells = _collisionService.GetItemCells(item);
-            _occupiedCells.UnionWith(cells);
+            await _gridVisualization.MoveItemByDelta(deltaCol, deltaRow);
         }
     }
 
     private async Task ResizeItemWidth(GridItem item, int delta)
     {
-        int newColSpan = item.ColumnSpan + delta;
-
-        if (newColSpan < 1)
+        if (_gridVisualization != null)
         {
-            newColSpan = 1;
+            await _gridVisualization.ResizeItemWidth(item, delta);
         }
-
-        if (newColSpan > Layout.Columns)
-        {
-            newColSpan = Layout.Columns;
-        }
-
-        if (item.Column + newColSpan - 1 > Layout.Columns)
-        {
-            return;
-        }
-
-        int originalColSpan = item.ColumnSpan;
-        item.ColumnSpan = newColSpan;
-
-        if (_collisionService.HasCollision(item, item.Column, item.Row))
-        {
-            item.ColumnSpan = originalColSpan;
-            return;
-        }
-
-        await LayoutChanged.InvokeAsync(Layout);
-        await InvokeAsync(StateHasChanged);
     }
 
     private async Task ResizeItemHeight(GridItem item, int delta)
     {
-        int newRowSpan = item.RowSpan + delta;
-
-        if (newRowSpan < 1)
+        if (_gridVisualization != null)
         {
-            newRowSpan = 1;
-        }
-
-        if (newRowSpan > Layout.Rows)
-        {
-            newRowSpan = Layout.Rows;
-        }
-
-        if (item.Row + newRowSpan - 1 > Layout.Rows)
-        {
-            return;
-        }
-
-        int originalRowSpan = item.RowSpan;
-        item.RowSpan = newRowSpan;
-
-        if (_collisionService.HasCollision(item, item.Column, item.Row))
-        {
-            item.RowSpan = originalRowSpan;
-            return;
-        }
-
-        await LayoutChanged.InvokeAsync(Layout);
-        await InvokeAsync(StateHasChanged);
-    }
-
-
-    private async Task AddNewItem()
-    {
-        var newItem = GridItemFactory.CreateNewItem(Layout.Items.Count + 1);
-
-        if (_placementService.TryPlaceNewItem(newItem))
-        {
-            Layout.Items.Add(newItem);
-            _selectedItem = newItem;
-            await LayoutChanged.InvokeAsync(Layout);
-            await InvokeAsync(StateHasChanged);
+            await _gridVisualization.ResizeItemHeight(item, delta);
         }
     }
 
-    private async Task ResetGrid()
+    private async Task DeselectItem()
     {
-        Layout.Items.Clear();
-        _selectedItem = null;
-        await LayoutChanged.InvokeAsync(Layout);
-        await InvokeAsync(StateHasChanged);
+        if (_gridVisualization != null)
+        {
+            await _gridVisualization.DeselectItem();
+        }
     }
 
     private void SaveLayout()
@@ -294,14 +93,5 @@ public partial class DraggableGridComponent : IDisposable
     {
         _selectedItem = null;
         await InvokeAsync(StateHasChanged);
-    }
-
-    public void Dispose()
-    {
-        _collisionService = null;
-        _placementService = null;
-        _styleService = null;
-        _dragService = null;
-
     }
 }
