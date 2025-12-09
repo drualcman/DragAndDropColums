@@ -38,7 +38,45 @@ public class GridPlacementService
             return PlacementResult.Success;
         }
 
-        // CASO 2: Si hay EXACTAMENTE UNA colisión, intentar intercambio
+        // CASO 2: Intentar empujar en la dirección del movimiento (PRIMERO)
+        // Calcular dirección del movimiento
+        int deltaCol = Math.Sign(boundedTargetCol - originalItemCol);
+        int deltaRow = Math.Sign(boundedTargetRow - originalItemRow);
+
+        // Si el movimiento es diagonal, priorizamos la dirección más fuerte
+        if (deltaCol != 0 && deltaRow != 0)
+        {
+            int colDistance = Math.Abs(boundedTargetCol - originalItemCol);
+            int rowDistance = Math.Abs(boundedTargetRow - originalItemRow);
+
+            if (colDistance >= rowDistance)
+            {
+                deltaRow = 0; // Priorizar movimiento horizontal
+            }
+            else
+            {
+                deltaCol = 0; // Priorizar movimiento vertical
+            }
+        }
+
+        // Si hay movimiento en alguna dirección, intentar empujar primero
+        if (deltaCol != 0 || deltaRow != 0)
+        {
+            var pushResult = await TryPushInDirectionAsync(
+                item,
+                boundedTargetCol,
+                boundedTargetRow,
+                deltaCol,
+                deltaRow,
+                originalPositions);
+
+            if (pushResult == PlacementResult.Success)
+            {
+                return PlacementResult.Success;
+            }
+        }
+
+        // CASO 3: Si el empuje falló, verificar si hay EXACTAMENTE UNA colisión para intercambio
         if (collisions.Count == 1)
         {
             GridItem targetItem = collisions[0];
@@ -59,10 +97,68 @@ public class GridPlacementService
             }
         }
 
-        // CASO 3: Colisión con múltiples elementos - usar algoritmo de empuje
-        return await HandleMultipleCollisionsAsync(item, boundedTargetCol, boundedTargetRow,
-            originalItemCol, originalItemRow, originalPositions);
+        // CASO 4: Si nada funcionó, intentar colocación alternativa
+        return await TryAlternativePlacementAsync(item, boundedTargetCol, boundedTargetRow);
     }
+
+    private async Task<PlacementResult> TryPushInDirectionAsync(
+        GridItem item,
+        int targetCol,
+        int targetRow,
+        int deltaCol,
+        int deltaRow,
+        Dictionary<Guid, (int Column, int Row)> originalPositions)
+    {
+        // Guardar la posición original del item
+        int originalItemCol = item.Column;
+        int originalItemRow = item.Row;
+
+        // Mover el item principal a la posición objetivo
+        item.Column = targetCol;
+        item.Row = targetRow;
+
+        var processedItems = new HashSet<Guid> { item.Id };
+        bool success = true;
+
+        // Obtener colisiones iniciales
+        var collisions = _collisionService.GetCollisionsAt(item, targetCol, targetRow);
+
+        foreach (GridItem collidingItem in collisions)
+        {
+            bool resolved = await ProcessCollisionAsync(
+                collidingItem,
+                item,
+                deltaCol,
+                deltaRow,
+                processedItems,
+                originalPositions,
+                0); // Nivel inicial de recursión
+
+            if (!resolved)
+            {
+                success = false;
+                break;
+            }
+        }
+
+        if (success)
+        {
+            // Verificar que no haya colisiones después del procesamiento
+            bool finalCollision = _collisionService.GetCollisionsAt(item, item.Column, item.Row)
+                .Any(c => c.Id != item.Id);
+
+            if (!finalCollision && !HasAnyCollision())
+            {
+                return PlacementResult.Success;
+            }
+        }
+
+        // Si falla, revertir a las posiciones originales
+        RevertToOriginalPositions(originalPositions);
+
+        return PlacementResult.Failed;
+    }
+
 
     private async Task<PlacementResult> TrySwapItemsAsync(
         GridItem movingItem,
@@ -177,89 +273,14 @@ public class GridPlacementService
         return PlacementResult.Failed;
     }
 
-    private async Task<PlacementResult> HandleMultipleCollisionsAsync(
-        GridItem item,
-        int targetCol,
-        int targetRow,
-        int originalCol,
-        int originalRow,
-        Dictionary<Guid, (int Column, int Row)> originalPositions)
-    {
-        // Mover el item principal a su nueva posición
-        item.Column = targetCol;
-        item.Row = targetRow;
-
-        // Calcular dirección del movimiento
-        int deltaCol = Math.Sign(targetCol - originalCol);
-        int deltaRow = Math.Sign(targetRow - originalRow);
-
-        // Si el movimiento es diagonal, priorizamos la dirección más fuerte
-        if (deltaCol != 0 && deltaRow != 0)
-        {
-            int colDistance = Math.Abs(targetCol - originalCol);
-            int rowDistance = Math.Abs(targetRow - originalRow);
-
-            if (colDistance >= rowDistance)
-            {
-                deltaRow = 0; // Priorizar movimiento horizontal
-            }
-            else
-            {
-                deltaCol = 0; // Priorizar movimiento vertical
-            }
-        }
-
-        var processedItems = new HashSet<Guid> { item.Id };
-        bool success = true;
-
-        // Obtener colisiones iniciales
-        var collisions = _collisionService.GetCollisionsAt(item, targetCol, targetRow);
-
-        foreach (GridItem collidingItem in collisions)
-        {
-            bool resolved = await ProcessCollisionAsync(
-                collidingItem,
-                item,
-                deltaCol,
-                deltaRow,
-                processedItems,
-                originalPositions,
-                0); // Nivel inicial de recursión
-
-            if (!resolved)
-            {
-                success = false;
-                break;
-            }
-        }
-
-        if (success)
-        {
-            // Verificar que no haya colisiones después del procesamiento
-            bool finalCollision = _collisionService.GetCollisionsAt(item, item.Column, item.Row)
-                .Any(c => c.Id != item.Id);
-
-            if (!finalCollision && !HasAnyCollision())
-            {
-                return PlacementResult.Success;
-            }
-        }
-
-        // Si falla, revertir a las posiciones originales
-        RevertToOriginalPositions(originalPositions);
-
-        // Intentar colocación alternativa
-        return await TryAlternativePlacementAsync(item, targetCol, targetRow);
-    }
-
     private async Task<bool> ProcessCollisionAsync(
-        GridItem collidingItem,
-        GridItem pushingItem,
-        int deltaCol,
-        int deltaRow,
-        HashSet<Guid> processedItems,
-        Dictionary<Guid, (int Column, int Row)> originalPositions,
-        int recursionLevel)
+            GridItem collidingItem,
+            GridItem pushingItem,
+            int deltaCol,
+            int deltaRow,
+            HashSet<Guid> processedItems,
+            Dictionary<Guid, (int Column, int Row)> originalPositions,
+            int recursionLevel)
     {
         // Evitar recursión infinita
         if (recursionLevel > _layout.Items.Count * 2)
