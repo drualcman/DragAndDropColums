@@ -62,7 +62,9 @@
                    SelectedItem="_selectedItem"
                    SelectedItemChanged="OnSelectedItemChanged"
                    LayoutChanged="OnLayoutChanged"
-                   OnItemRemoved="RemoveItem" />
+                   OnItemRemoved="RemoveItem" >
+               <p>@context</p>
+</GridVisualization>
 
 <!-- Editor de propiedades -->
 @if (_selectedItem != null)

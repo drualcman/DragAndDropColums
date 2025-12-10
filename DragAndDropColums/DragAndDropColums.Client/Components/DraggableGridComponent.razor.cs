@@ -76,7 +76,7 @@ public partial class DraggableGridComponent
 
     private async Task DeselectItem()
     {
-        if (_gridVisualization != null)
+        if (_gridVisualization is not null)
         {
             await _gridVisualization.DeselectItem();
         }

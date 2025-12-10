@@ -5,7 +5,7 @@
 
 <div class="demo-container">
 
-    <GridVisualization @bind-Layout="gridLayout" TData="object" Theme="GridTheme.PastelTheme" AllowKeyboardControls="true" >
+    <GridVisualization @bind-Layout="gridLayout" TData="object" Theme="GridTheme.Default">
         <p>@context</p>
     </GridVisualization>
 
@@ -14,8 +14,8 @@
 @code {
     private GridLayout gridLayout = new()
     {
-        Columns = 8,
-        Rows = 10,
+        Columns = 6,
+        Rows = 6,
         Items = new List<GridItem>
         {
             new() {
@@ -28,7 +28,7 @@
             },
             new() {
                 Id = Guid.NewGuid(),
-                Column = 4,
+                Column = 3,
                 Row = 1,
                 ColumnSpan = 2,
                 RowSpan = 2,
@@ -37,14 +37,14 @@
             new() {
                 Id = Guid.NewGuid(),
                 Column = 1,
-                Row = 4,
+                Row = 3,
                 ColumnSpan = 2,
                 RowSpan = 2,
                 Data = "Contenido principal que puede ser más largo y ocupar múltiples celdas. Ideal para mostrar información detallada."
             },
             new() {
                 Id = Guid.NewGuid(),
-                Column = 6,
+                Column = 3,
                 Row = 3,
                 ColumnSpan = 2,
                 RowSpan = 2,
