@@ -18,7 +18,7 @@
         <div class="selected-item-info">
             <strong>Seleccionado:</strong>
             <span class="selected-item-details">
-                (@_selectedItem.Column,@_selectedItem.Row) - Tamaño: @_selectedItem.ColumnSpan×@_selectedItem.RowSpan
+                (@_selectedItem.Position.Column,@_selectedItem.Position.Row) - Tamaño: @_selectedItem.Size.Width×@_selectedItem.Size.Height
             </span>
             <button @onclick="@(() => RemoveItem(_selectedItem))" class="btn-danger">🗑️ Eliminar</button>
         </div>
@@ -66,7 +66,7 @@
                <p>@context</p>
 </GridVisualization>
 
-<!-- Editor de propiedades -->
+@* <!-- Editor de propiedades -->
 @if (_selectedItem != null)
 {
     <div class="item-editor">
@@ -74,9 +74,9 @@
         <div class="editor-grid">
             <div class="editor-section">
                 <label>Ancho (columnas):</label>
-                <input type="range" min="1" max="@Layout.Columns"
-                       @bind="_selectedItem.ColumnSpan" @bind:event="oninput" />
-                <span>@_selectedItem.ColumnSpan</span>
+                <input type="range" min="1" max="@Layout.GridLayout.Columns"
+                       @bind="_selectedItem.Size.Width" @bind:event="oninput" />
+                <span>@_selectedItem.Size.Width</span>
             </div>
 
             <div class="editor-section">
@@ -92,4 +92,4 @@
             <button @onclick="DeselectItem" class="btn btn-secondary">❌ Cancelar</button>
         </div>
     </div>
-}
+} *@

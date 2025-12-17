@@ -1,11 +1,10 @@
 ﻿@page "/"
-@using BlazorBasics.DraggableGrid.ValueObjects
 
 <PageTitle>Grid Dinámico - Demo</PageTitle>
 
 <div class="demo-container">
 
-    <GridVisualization @bind-Layout="gridLayout" TData="object" Theme="GridTheme.Default">
+    <GridVisualization @bind-Layout="gridLayout" TData="string" Theme="GridTheme.EmeraldGreen" AllowKeyboardControls="true">
         <p>@context</p>
     </GridVisualization>
 
@@ -14,40 +13,20 @@
 @code {
     private GridLayout gridLayout = new()
     {
-        Columns = 6,
-        Rows = 6,
+        Columns = 4,
+        Rows = 4,
         Items = new List<GridItem>
         {
-            new() {
-                Id = Guid.NewGuid(),
-                Column = 1,
-                Row = 1,
-                ColumnSpan = 2,
-                RowSpan = 2,
+            new(new GridPosition(0,0), new GridSize(2,2)) {
                 Data = "Título Principal"
             },
-            new() {
-                Id = Guid.NewGuid(),
-                Column = 3,
-                Row = 1,
-                ColumnSpan = 2,
-                RowSpan = 2,
+            new(new GridPosition(0,2), new GridSize(2,2)) {
                 Data = "Subtítulo o descripción breve"
             },
-            new() {
-                Id = Guid.NewGuid(),
-                Column = 1,
-                Row = 3,
-                ColumnSpan = 2,
-                RowSpan = 2,
+            new(new GridPosition(2,0), new GridSize(2,2)) {
                 Data = "Contenido principal que puede ser más largo y ocupar múltiples celdas. Ideal para mostrar información detallada."
             },
-            new() {
-                Id = Guid.NewGuid(),
-                Column = 3,
-                Row = 3,
-                ColumnSpan = 2,
-                RowSpan = 2,
+            new(new GridPosition(2,2), new GridSize(2,2)) {
                 Data = "Panel lateral o sidebar con información adicional"
             },
         }

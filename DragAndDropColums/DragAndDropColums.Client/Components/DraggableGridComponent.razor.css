@@ -67,7 +67,7 @@
         transform: scale(1.05);
     }
 
-/* Información del elemento seleccionado */
+ Información del elemento seleccionado 
 .selected-item-info {
     margin-left: auto;
     display: flex;
@@ -92,7 +92,7 @@
     opacity: 0.9;
 }
 
-/* Controles de movimiento */
+ Controles de movimiento 
 .movement-controls {
     background: #f5f5f5;
     padding: 15px;
@@ -132,7 +132,7 @@
         transform: scale(1.05);
     }
 
-/* Instrucciones */
+ Instrucciones 
 .grid-instructions {
     display: flex;
     flex-direction: row;
@@ -154,7 +154,7 @@
         line-height: 1.4;
     }
 
-/* Editor */
+ Editor 
 .item-editor {
     background: white;
     border: 2px solid #dee2e6;
